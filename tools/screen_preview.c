@@ -9,13 +9,19 @@
 #define SCREEN_PREVIEW_DIR "build/preview"
 #endif
 
-static void populate_sample_wave(sensor_state_t *st, uint16_t tip_base, uint16_t cur_base, uint16_t aux_base) {
+static void populate_sample_trace(
+    sensor_state_t *st,
+    uint16_t tip_base,
+    uint16_t cur_base,
+    uint16_t aux_base,
+    uint16_t start_c,
+    uint16_t end_c
+) {
     sensors_state_init(st);
     for (uint32_t i = 0u; i < 64u; ++i) {
-        uint16_t tip = (uint16_t)(tip_base + ((i * 19u) % 240u));
-        uint16_t cur = (uint16_t)(cur_base + ((i % 8u) * 4u) - 16u);
-        uint16_t aux = (uint16_t)(aux_base + ((i % 5u) * 6u));
-        sensors_update_snapshot(st, tip, cur, aux, NULL);
+        uint16_t temp_c = (uint16_t)(start_c + (((int32_t)end_c - (int32_t)start_c) * (int32_t)i) / 63);
+        sensors_update_snapshot(st, tip_base, cur_base, aux_base, NULL);
+        sensors_record_temp_c(st, temp_c, NULL);
     }
 }
 
@@ -25,61 +31,148 @@ int main(void) {
     ui_status_t ui_st;
     char path[256];
 
-    /* Screen 1: Safe Bring-Up Idle (USB disconnected, iron in stand PB5=1) */
+    /* Screen 1: Boot-Safe Standby (F245 handle, 22.9V rail present, PA2 OFF) */
     display_init();
-    populate_sample_wave(&st, 120u, 2048u, 1480u);
+    populate_sample_trace(&st, 22u, 2038u, 1779u, 24u, 24u);
     inp = (input_state_t){
         .held_mask = 0u,
-        .pressed_mask = 0u,
-        .released_mask = 0u,
-        .long_mask = 0u,
-        .raw_mask = 0u,
-        .pb5_sleep = 1u,
+        .pb5_sleep = 0u,
         .pb6_handle = 1u,
         .pb0_raw = 1u,
         .pb2_raw = 0u,
-        .pb5_edges = 3u
+        .pb5_edges = 2u
     };
     ui_st = (ui_status_t){
-        .usb_connected = 0u,
+        .hst = {
+            .state = HEATER_STANDBY,
+            .armed = 0u,
+            .is_f245 = 1u,
+            .in_stand = 1u,
+            .sleep_en = 1u,
+            .fault_mask = FAULT_NONE,
+            .target_c = 300u,
+            .active_target_c = 300u,
+            .sleep_temp_c = 150u,
+            .tip_deci_c = 245,
+            .rail_mv = 22940u,
+            .cur_ma = 0,
+            .cur_peak_ma = 0,
+            .cur_zero_mv = 1642u,
+            .duty_ticks = 0u,
+            .duty_pct = 0u,
+            .tip_raw = 180u,
+            .cur_raw = 2038u,
+            .aux_raw = 1779u
+        },
+        .presets_c = { 200u, 300u, 350u },
+        .active_preset = 1u,
+        .cal_offset_c = 0,
+        .usb_connected = 1u,
         .stream_enabled = 0u,
         .stream_interval_ms = 100u,
         .backlight_pct = 80u,
         .led_mask = 0x00u,
-        .uptime_ms = 42000u,
-        .usb_gccfg_hi = 0x2Du
+        .uptime_ms = 12000u
     };
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
-    snprintf(path, sizeof(path), "%s/01_safe_idle.ppm", SCREEN_PREVIEW_DIR);
+    snprintf(path, sizeof(path), "%s/01_standby_f245.ppm", SCREEN_PREVIEW_DIR);
     if (host_display_write_ppm(path) != 0) return 1;
 
-    /* Screen 2: USB CDC active, keys pressed, LED test running */
+    /* Screen 2: Active Heating (F245 @ 315.4C -> 320C, 6.45A, USB Stream) */
     display_init();
-    populate_sample_wave(&st, 860u, 2240u, 1620u);
+    populate_sample_trace(&st, 2360u, 2560u, 1778u, 25u, 315u);
     inp = (input_state_t){
-        .held_mask = KEY_BIT_PD2 | KEY_BIT_PC12,
-        .pressed_mask = 0u,
-        .released_mask = 0u,
-        .long_mask = 0u,
-        .raw_mask = KEY_BIT_PD2 | KEY_BIT_PC12,
-        .pb5_sleep = 0u,
-        .pb6_handle = 0u,
+        .held_mask = KEY_BIT_PB3,
+        .pb5_sleep = 1u,
+        .pb6_handle = 1u,
         .pb0_raw = 1u,
-        .pb2_raw = 1u,
-        .pb5_edges = 17u
+        .pb2_raw = 0u,
+        .pb5_edges = 8u
     };
     ui_st = (ui_status_t){
+        .hst = {
+            .state = HEATER_HEATING,
+            .armed = 1u,
+            .is_f245 = 1u,
+            .in_stand = 0u,
+            .sleep_en = 1u,
+            .fault_mask = FAULT_NONE,
+            .target_c = 320u,
+            .active_target_c = 320u,
+            .sleep_temp_c = 150u,
+            .tip_deci_c = 3154,
+            .rail_mv = 22920u,
+            .cur_ma = 6450,
+            .cur_peak_ma = 7820,
+            .cur_zero_mv = 1642u,
+            .duty_ticks = 64u,
+            .duty_pct = 71u,
+            .tip_raw = 2360u,
+            .cur_raw = 2560u,
+            .aux_raw = 1778u
+        },
+        .presets_c = { 200u, 300u, 350u },
+        .active_preset = 0xFFu,
+        .cal_offset_c = 2,
         .usb_connected = 1u,
         .stream_enabled = 1u,
         .stream_interval_ms = 100u,
         .backlight_pct = 100u,
-        .led_mask = 0x5Au,
+        .led_mask = 0x3Fu,
         .uptime_ms = 185000u
     };
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
-    snprintf(path, sizeof(path), "%s/02_usb_keys_active.ppm", SCREEN_PREVIEW_DIR);
+    snprintf(path, sizeof(path), "%s/02_heating_f245.ppm", SCREEN_PREVIEW_DIR);
+    if (host_display_write_ppm(path) != 0) return 1;
+
+    /* Screen 3: Safety Fault (Open Tip / No 24V USB-only protection) */
+    display_init();
+    populate_sample_trace(&st, 4080u, 2038u, 180u, 180u, 45u);
+    inp = (input_state_t){
+        .held_mask = KEY_BIT_PC11,
+        .pb5_sleep = 0u,
+        .pb6_handle = 0u,
+        .pb0_raw = 1u,
+        .pb2_raw = 0u,
+        .pb5_edges = 9u
+    };
+    ui_st = (ui_status_t){
+        .hst = {
+            .state = HEATER_FAULT,
+            .armed = 0u,
+            .is_f245 = 0u,
+            .in_stand = 1u,
+            .sleep_en = 1u,
+            .fault_mask = FAULT_OPEN_TIP | FAULT_UNDERVOLT,
+            .target_c = 300u,
+            .active_target_c = 300u,
+            .sleep_temp_c = 150u,
+            .tip_deci_c = 4800,
+            .rail_mv = 2320u,
+            .cur_ma = 0,
+            .cur_peak_ma = 0,
+            .cur_zero_mv = 1642u,
+            .duty_ticks = 0u,
+            .duty_pct = 0u,
+            .tip_raw = 4080u,
+            .cur_raw = 2038u,
+            .aux_raw = 180u
+        },
+        .presets_c = { 200u, 300u, 350u },
+        .active_preset = 1u,
+        .cal_offset_c = 0,
+        .usb_connected = 1u,
+        .stream_enabled = 0u,
+        .stream_interval_ms = 100u,
+        .backlight_pct = 80u,
+        .led_mask = 0xAAu,
+        .uptime_ms = 60000u
+    };
+    ui_draw_static();
+    ui_draw_dynamic(&st.snap, &inp, &ui_st);
+    snprintf(path, sizeof(path), "%s/03_fault_protection.ppm", SCREEN_PREVIEW_DIR);
     if (host_display_write_ppm(path) != 0) return 1;
 
     return 0;

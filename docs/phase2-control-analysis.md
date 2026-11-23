@@ -36,13 +36,13 @@ Die DWS-200 nutzt in der Stock-Firmware **kein AC-Zero-Crossing**, sondern eine 
 - `Stand_Read` (`0x080146d0`) liest `PB5` (Sleep-Ablage), `Handle_Read` (`0x08006c74`) liest `PB6`.
 - `Sleep_Stand_0x08011310` entprellt `PB6` über `5` Zyklen (`50 ms`) und schaltet drei Analog-Mux-/Verstärker-Steuerleitungen (`PC13`, `PC14`, `PC15`) um. Gleichzeitig wird der PID für `100` Zyklen (`1,0 s`, `[0x20000028 + 5] = 100`) pausiert (`0x08011360`), damit sich die Thermoelement-Eingangsstufe einschwingen kann:
 
-| Zustand `PB6` | Stock `handle_type` | `PC13` | `PC14` | `PC15` | Anmerkung |
+| Zustand `PB6` | Stock `handle_type` / Griff | `PC13` | `PC14` | `PC15` | Anmerkung |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`PB6 == 1`** | `1` *(Standard an Teststation)* | `LOW` | `HIGH` | `LOW` | Aktive Konfiguration bei `pb6=1` im Phase-1-Bring-Up |
-| **`PB6 == 0`** | `0` | `HIGH` | `LOW` | `HIGH` | Zweiter Handgrifftyp (`F245` vs. `F210`) |
+| **`PB6 == 1`** | `1` — **`F245`** *(am Gerät bestätigt)* | `LOW` | `HIGH` | `LOW` | `200 W`-Bereich, Max-Duty `80..90` Ticks, Überstrom `10,0 A` |
+| **`PB6 == 0`** | `0` — **`F210`** | `HIGH` | `LOW` | `HIGH` | Hart begrenzt auf `30` Ticks (`2,73 ms`), Überstrom `15,0 A` |
 
-> [!IMPORTANT]
-> Die physische Zuordnung von `handle_type = 1` vs. `0` zu `F245` und `F210` wird vor Freigabe von `PA2` noch einmal direkt am angeschlossenen Handgriff auf `COM7` gegenbestätigt.
+> [!NOTE]
+> Die Zuordnung **`PB6 == 1` = `F245`** wurde direkt am angeschlossenen Handgriff auf der echten Station bestätigt. Beim Boot und jedem Griffwechsel (`50 ms` entprellt) schaltet `OpenDWS-200` `PC13..PC15` (nach `PWC_CTRL.BPWEN` + `CRM_BPDC.LEXTEN=0`) um und erzwingt `1,0 s` Heizsperre zum Einschwingen der Eingangsstufe.
 
 ---
 

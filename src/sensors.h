@@ -29,10 +29,12 @@ typedef struct {
     uint16_t aux_raw;
     uint16_t aux_avg;
     uint32_t aux_mv;
+    uint32_t rail_mv;
 
     uint16_t tip_hist[SENSOR_HISTORY_LEN];
     uint16_t cur_hist[SENSOR_HISTORY_LEN];
     uint16_t aux_hist[SENSOR_HISTORY_LEN];
+    uint16_t temp_hist[SENSOR_HISTORY_LEN];
     uint8_t hist_head;
     uint8_t hist_count;
 } sensor_snapshot_t;
@@ -45,7 +47,10 @@ typedef struct {
 } sensor_state_t;
 
 uint32_t sensors_adc_to_mv(uint16_t raw);
+uint32_t sensors_rail_adc_to_mv(uint16_t aux_raw);
 int32_t sensors_cur_adc_to_ma(uint16_t raw);
+int32_t sensors_cur_adc_to_ma_zero(uint16_t raw, uint16_t zero_mv);
+int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_offset_deci_c);
 
 void sensors_filter_init(sensor_filter_t *f);
 void sensors_filter_push(sensor_filter_t *f, uint16_t sample);
@@ -59,6 +64,7 @@ void sensors_update_snapshot(
     uint16_t aux_raw,
     sensor_snapshot_t *out
 );
+void sensors_record_temp_c(sensor_state_t *st, uint16_t temp_c, sensor_snapshot_t *out);
 
 void sensors_init(void);
 uint16_t sensors_read_channel(uint8_t ch, uint8_t sample_time);

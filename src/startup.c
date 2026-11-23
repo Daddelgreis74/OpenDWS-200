@@ -17,6 +17,8 @@ void HardFault_Handler(void);
 void Default_Handler(void);
 void SysTick_Handler(void);
 void EXINT9_5_IRQHandler(void);
+void TMR1_OVF_TMR10_IRQHandler(void);
+void TMR2_IRQHandler(void);
 void OTGFS1_IRQHandler(void);
 int main(void);
 
@@ -39,8 +41,12 @@ void (*const vector_table[92])(void) = {
     [15] = SysTick_Handler,
 
     [16 ... 38] = Default_Handler,
-    [39] = EXINT9_5_IRQHandler, /* IRQ 23: PB5 Sleep stand edge detect */
-    [40 ... 58] = Default_Handler,
+    [39] = EXINT9_5_IRQHandler,       /* IRQ 23: PB5 Sleep stand edge detect */
+    [40] = Default_Handler,
+    [41] = TMR1_OVF_TMR10_IRQHandler, /* IRQ 25: 1 ms heater/sensor scheduler */
+    [42 ... 43] = Default_Handler,
+    [44] = TMR2_IRQHandler,           /* IRQ 28: 91 us pulse & short-circuit check */
+    [45 ... 58] = Default_Handler,
     /* Reserved AT32F415 IRQ slots: 43..48 (vec 59..64) */
     [59 ... 64] = 0,
     [65 ... 66] = Default_Handler,

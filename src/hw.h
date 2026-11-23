@@ -47,12 +47,32 @@
 #define NVIC_ICPR0      REG32(0xE000E280u)
 #define NVIC_ICPR1      REG32(0xE000E284u)
 #define NVIC_ICPR2      REG32(0xE000E288u)
+#define NVIC_IP(irqn)   REG8(0xE000E400u + (uint32_t)(irqn))
 
 #define SCB_VTOR        REG32(0xE000ED08u)
 #define SCB_AIRCR       REG32(0xE000ED0Cu)
 
 /* FLASH Controller */
 #define FLASH_PSR       REG32(FLASH_REG_BASE + 0x00u)
+#define FLASH_UNLOCK    REG32(FLASH_REG_BASE + 0x04u)
+#define FLASH_STS       REG32(FLASH_REG_BASE + 0x0Cu)
+#define FLASH_CTRL      REG32(FLASH_REG_BASE + 0x10u)
+#define FLASH_ADDR      REG32(FLASH_REG_BASE + 0x14u)
+
+#define FLASH_KEY1          0x45670123u
+#define FLASH_KEY2          0xCDEF89ABu
+#define FLASH_STS_OBF       (1u << 0)
+#define FLASH_STS_PRGMERR   (1u << 2)
+#define FLASH_STS_EPPERR    (1u << 4)
+#define FLASH_STS_ODF       (1u << 5)
+#define FLASH_CTRL_FPRGM    (1u << 0)
+#define FLASH_CTRL_SECERS   (1u << 1)
+#define FLASH_CTRL_ERSTR    (1u << 6)
+#define FLASH_CTRL_OPLK     (1u << 7)
+
+/* PWC (Power Control) */
+#define PWC_CTRL        REG32(PWC_BASE + 0x00u)
+#define PWC_CTRL_BPWEN  (1u << 8)
 
 /* CRM (Clock and Reset Management) */
 #define CRM_CTRL        REG32(CRM_BASE + 0x00u)
@@ -63,9 +83,12 @@
 #define CRM_AHBEN       REG32(CRM_BASE + 0x14u)
 #define CRM_APB2EN      REG32(CRM_BASE + 0x18u)
 #define CRM_APB1EN      REG32(CRM_BASE + 0x1Cu)
+#define CRM_BPDC        REG32(CRM_BASE + 0x20u)
 #define CRM_PLL         REG32(CRM_BASE + 0x2Cu)
 #define CRM_MISC1       REG32(CRM_BASE + 0x30u)
 #define CRM_MISC2       REG32(CRM_BASE + 0x54u)
+
+#define CRM_BPDC_LEXTEN (1u << 0)
 
 /* CRM_CTRL bits */
 #define CRM_CTRL_HICKEN     (1u << 0)
@@ -222,6 +245,8 @@
 
 /* IRQ Numbers (AT32F415) */
 #define EXINT9_5_IRQn       23u
+#define TMR1_OVF_IRQn       25u
+#define TMR2_IRQn           28u
 #define OTGFS1_IRQn         67u
 
 static inline void irq_enable(uint32_t irqn) {
@@ -232,6 +257,30 @@ static inline void irq_enable(uint32_t irqn) {
     } else {
         NVIC_ISER2 = (1u << (irqn - 64u));
     }
+}
+
+static inline void irq_disable(uint32_t irqn) {
+    if (irqn < 32u) {
+        NVIC_ICER0 = (1u << irqn);
+    } else if (irqn < 64u) {
+        NVIC_ICER1 = (1u << (irqn - 32u));
+    } else {
+        NVIC_ICER2 = (1u << (irqn - 64u));
+    }
+}
+
+static inline void irq_clear_pending(uint32_t irqn) {
+    if (irqn < 32u) {
+        NVIC_ICPR0 = (1u << irqn);
+    } else if (irqn < 64u) {
+        NVIC_ICPR1 = (1u << (irqn - 32u));
+    } else {
+        NVIC_ICPR2 = (1u << (irqn - 64u));
+    }
+}
+
+static inline void irq_set_priority(uint32_t irqn, uint8_t prio) {
+    NVIC_IP(irqn) = prio;
 }
 
 static inline void gpio_config_pin(uint32_t gpio_base, uint32_t pin, uint32_t mode4, uint8_t odr_pull) {

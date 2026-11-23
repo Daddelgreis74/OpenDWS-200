@@ -4,27 +4,103 @@
 #include "fmt.h"
 #include "gfx.h"
 
-#define COL_BG         RGB565(11, 16, 27)
-#define COL_CARD       RGB565(20, 29, 46)
-#define COL_BORDER     RGB565(31, 45, 70)
-#define COL_TEXT       RGB565(241, 245, 249)
-#define COL_MUTED      RGB565(122, 140, 165)
-#define COL_CYAN       RGB565(0, 229, 255)
-#define COL_CYAN_DARK  RGB565(10, 51, 66)
-#define COL_EMERALD    RGB565(16, 185, 129)
-#define COL_GREEN_DARK RGB565(12, 51, 38)
-#define COL_AMBER      RGB565(245, 158, 11)
-#define COL_RED        RGB565(239, 68, 68)
-#define COL_RED_DARK   RGB565(69, 20, 26)
-#define COL_SPARK_BG   RGB565(13, 20, 33)
+#define COL_BG          RGB565(11, 16, 27)
+#define COL_CARD        RGB565(20, 29, 46)
+#define COL_BORDER      RGB565(31, 45, 70)
+#define COL_TEXT        RGB565(241, 245, 249)
+#define COL_MUTED       RGB565(122, 140, 165)
+#define COL_CYAN        RGB565(0, 229, 255)
+#define COL_CYAN_DARK   RGB565(10, 51, 66)
+#define COL_EMERALD     RGB565(16, 185, 129)
+#define COL_GREEN_DARK  RGB565(12, 51, 38)
+#define COL_AMBER       RGB565(245, 158, 11)
+#define COL_AMBER_DARK  RGB565(64, 41, 8)
+#define COL_ORANGE      RGB565(249, 115, 22)
+#define COL_ORANGE_DARK RGB565(68, 28, 10)
+#define COL_RED         RGB565(239, 68, 68)
+#define COL_RED_DARK    RGB565(69, 20, 26)
+#define COL_SPARK_BG    RGB565(13, 20, 33)
 
-static const uint16_t CARD_X[3] = { 6u, 111u, 216u };
-static const uint16_t CARD_W    = 98u;
-static const uint16_t CARD_Y    = 30u;
-static const uint16_t CARD_H    = 88u;
+static size_t append_fixed_1(char *buf, size_t pos, size_t cap, int32_t deci, uint8_t whole_w) {
+    if (deci < 0) deci = 0;
+    uint32_t whole = (uint32_t)deci / 10u;
+    uint32_t frac = (uint32_t)deci % 10u;
+    char tmp[16];
+    fmt_uint_pad(tmp, sizeof(tmp), whole, whole_w, ' ');
+    pos = fmt_append_str(buf, pos, cap, tmp);
+    pos = fmt_append_str(buf, pos, cap, ".");
+    fmt_uint_pad(tmp, sizeof(tmp), frac, 1u, '0');
+    return fmt_append_str(buf, pos, cap, tmp);
+}
 
-static const uint16_t KEY_TILE_X[5] = { 12u, 72u, 132u, 192u, 252u };
-static const char *const KEY_LABELS[5] = { "PD2", "PB3", "PB4", "PC12", "PC11" };
+static size_t append_ma_as_amps(char *buf, size_t pos, size_t cap, int32_t ma, uint8_t show_sign) {
+    char tmp[8];
+    if (ma < 0) {
+        pos = fmt_append_str(buf, pos, cap, "-");
+        ma = -ma;
+    } else if (show_sign != 0u) {
+        pos = fmt_append_str(buf, pos, cap, "+");
+    } else {
+        pos = fmt_append_str(buf, pos, cap, " ");
+    }
+    uint32_t uma = (uint32_t)ma;
+    uint32_t amps = uma / 1000u;
+    uint32_t c_amps = (uma % 1000u) / 10u;
+    fmt_uint_pad(tmp, sizeof(tmp), amps, 2u, ' ');
+    pos = fmt_append_str(buf, pos, cap, tmp);
+    pos = fmt_append_str(buf, pos, cap, ".");
+    fmt_uint_pad(tmp, sizeof(tmp), c_amps, 2u, '0');
+    return fmt_append_str(buf, pos, cap, tmp);
+}
+
+static void pick_state_style(
+    const heater_status_t *h,
+    const char **label,
+    uint16_t *fg,
+    uint16_t *bg,
+    uint16_t *border
+) {
+    if (h->state == HEATER_FAULT || (h->fault_mask & (uint16_t)~FAULT_SETTLING) != 0u) {
+        *label = heater_fault_name(h->fault_mask);
+        *fg = COL_RED;
+        *bg = COL_RED_DARK;
+        *border = COL_RED;
+        return;
+    }
+    if (h->state == HEATER_HEATING) {
+        int32_t diff = (int32_t)h->active_target_c * 10 - h->tip_deci_c;
+        if (diff >= -30 && diff <= 30) {
+            *label = "READY";
+            *fg = COL_EMERALD;
+            *bg = COL_GREEN_DARK;
+            *border = COL_EMERALD;
+        } else {
+            *label = "HEATING";
+            *fg = COL_ORANGE;
+            *bg = COL_ORANGE_DARK;
+            *border = COL_ORANGE;
+        }
+        return;
+    }
+    if (h->state == HEATER_SLEEP) {
+        *label = "SLEEP";
+        *fg = COL_CYAN;
+        *bg = COL_CYAN_DARK;
+        *border = COL_CYAN;
+        return;
+    }
+    if (h->state == HEATER_PROBE) {
+        *label = "PROBE";
+        *fg = COL_CYAN;
+        *bg = COL_CYAN_DARK;
+        *border = COL_CYAN;
+        return;
+    }
+    *label = "STANDBY";
+    *fg = COL_AMBER;
+    *bg = COL_AMBER_DARK;
+    *border = COL_AMBER;
+}
 
 void ui_draw_static(void) {
     gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
@@ -33,175 +109,229 @@ void ui_draw_static(void) {
     gfx_fill_rect(0u, 0u, LCD_WIDTH, 25u, COL_CARD);
     gfx_draw_hline(0u, 25u, LCD_WIDTH, COL_BORDER);
     gfx_draw_text(6u, 9u, "OpenDWS-200", COL_TEXT, COL_CARD, 1u);
-    gfx_draw_badge(78u, 4u, 96u, 18u, "HEATER OFF", COL_RED, COL_RED_DARK, COL_RED);
 
-    /* Three live ADC telemetry cards */
-    static const char *const card_titles[3] = { "TIP PC0/10", "CUR PC1/11", "AUX PA3/3" };
-    const uint16_t card_cols[3] = { COL_CYAN, COL_EMERALD, COL_AMBER };
-    for (uint32_t i = 0u; i < 3u; ++i) {
-        gfx_fill_rect(CARD_X[i], CARD_Y, CARD_W, CARD_H, COL_CARD);
-        gfx_draw_rect(CARD_X[i], CARD_Y, CARD_W, CARD_H, COL_BORDER);
-        gfx_draw_text((uint16_t)(CARD_X[i] + 6u), (uint16_t)(CARD_Y + 6u), card_titles[i], card_cols[i], COL_CARD, 1u);
-        gfx_draw_rect((uint16_t)(CARD_X[i] + 4u), (uint16_t)(CARD_Y + 49u), (uint16_t)(CARD_W - 8u), 34u, COL_BORDER);
-    }
+    /* Hero card */
+    gfx_fill_rect(6u, 30u, 308u, 92u, COL_CARD);
+    gfx_draw_rect(6u, 30u, 308u, 92u, COL_BORDER);
+    gfx_draw_vline(196u, 36u, 80u, COL_BORDER);
+    gfx_draw_rect(204u, 47u, 102u, 11u, COL_BORDER);
 
-    /* GPIO / key diagnostic panel */
-    gfx_fill_rect(6u, 124u, 308u, 86u, COL_CARD);
-    gfx_draw_rect(6u, 124u, 308u, 86u, COL_BORDER);
+    /* Middle telemetry + sparkline card */
+    gfx_fill_rect(6u, 127u, 308u, 82u, COL_CARD);
+    gfx_draw_rect(6u, 127u, 308u, 82u, COL_BORDER);
+    gfx_draw_text(12u, 132u, "TEMP TRACE (0..480C)", COL_MUTED, COL_CARD, 1u);
+    gfx_draw_rect(12u, 142u, 152u, 62u, COL_BORDER);
 
-    /* Bottom hint bar */
-    gfx_draw_hline(0u, 215u, LCD_WIDTH, COL_BORDER);
-    gfx_fill_rect(0u, 216u, LCD_WIDTH, 24u, COL_CARD);
-    gfx_draw_text(10u, 224u, "PD2:LED  PB3/4:BL-/+  PC12:USB  PC11:BEEP", COL_MUTED, COL_CARD, 1u);
+    /* Bottom 5-button bar */
+    gfx_draw_hline(0u, 213u, LCD_WIDTH, COL_BORDER);
+    gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
 }
 
 void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, const ui_status_t *st) {
     if (snap == NULL || inp == NULL || st == NULL) return;
 
+    const heater_status_t *h = &st->hst;
     char line[64];
     char num[16];
 
-    /* Top badges */
+    /* Header badges */
+    const char *st_label;
+    uint16_t st_fg, st_bg, st_bd;
+    pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
+    gfx_draw_badge(78u, 4u, 88u, 18u, st_label, st_fg, st_bg, st_bd);
+
     if (st->usb_connected) {
-        gfx_draw_badge(180u, 4u, 64u, 18u, "USB:CDC", COL_EMERALD, COL_GREEN_DARK, COL_EMERALD);
+        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:CDC", COL_EMERALD, COL_GREEN_DARK, COL_EMERALD);
     } else {
-        gfx_draw_badge(180u, 4u, 64u, 18u, "USB:---", COL_MUTED, COL_BG, COL_BORDER);
+        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:---", COL_MUTED, COL_BG, COL_BORDER);
     }
+
     gfx_draw_badge(
-        250u, 4u, 64u, 18u,
-        inp->pb6_handle ? "PB6:HI" : "PB6:LO",
-        inp->pb6_handle ? COL_CYAN : COL_AMBER,
-        COL_BG,
-        COL_BORDER
+        246u, 4u, 68u, 18u,
+        h->is_f245 ? "HDL:F245" : "HDL:F210",
+        h->is_f245 ? COL_CYAN : COL_AMBER,
+        h->is_f245 ? COL_CYAN_DARK : COL_AMBER_DARK,
+        h->is_f245 ? COL_CYAN : COL_AMBER
     );
 
-    /* Card 1: TIP (PC0 / CH10) */
-    fmt_uint_pad(num, sizeof(num), snap->tip_avg, 4u, ' ');
-    gfx_draw_text((uint16_t)(CARD_X[0] + 6u), (uint16_t)(CARD_Y + 18u), num, COL_TEXT, COL_CARD, 2u);
-    gfx_draw_text((uint16_t)(CARD_X[0] + 58u), (uint16_t)(CARD_Y + 24u), "raw", COL_MUTED, COL_CARD, 1u);
+    /* Hero Left: Subtitle & Big Temperature */
+    if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
+        gfx_draw_text(14u, 36u, "NO CARTRIDGE / OPEN!", COL_RED, COL_CARD, 1u);
+        gfx_draw_text(14u, 48u, "OPEN!", COL_RED, COL_CARD, 4u);
+        gfx_fill_rect(136u, 48u, 30u, 28u, COL_CARD);
+    } else {
+        if ((h->fault_mask & FAULT_SETTLING) != 0u) {
+            gfx_draw_text(14u, 36u, "HANDLE SETTLING...  ", COL_AMBER, COL_CARD, 1u);
+        } else {
+            gfx_draw_text(14u, 36u, "TIP TEMPERATURE     ", COL_MUTED, COL_CARD, 1u);
+        }
+        size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
+        line[tp] = '\0';
+        uint16_t temp_col = COL_TEXT;
+        if (h->state == HEATER_FAULT || (h->fault_mask & FAULT_OVERTEMP) != 0u) {
+            temp_col = COL_RED;
+        } else if (h->state == HEATER_HEATING) {
+            temp_col = st_fg;
+        } else if (h->state == HEATER_SLEEP) {
+            temp_col = COL_CYAN;
+        }
+        gfx_draw_text(14u, 48u, line, temp_col, COL_CARD, 4u);
+        gfx_draw_rect(138u, 48u, 5u, 5u, temp_col);
+        gfx_draw_text(145u, 50u, "C", temp_col, COL_CARD, 2u);
+    }
 
+    /* Setpoint line */
     size_t p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "mV:");
-    fmt_uint_pad(num, sizeof(num), snap->tip_mv, 4u, ' ');
+    if (h->state == HEATER_SLEEP) {
+        p = fmt_append_str(line, p, sizeof(line), "SLP:");
+        fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
+    } else {
+        p = fmt_append_str(line, p, sizeof(line), "SET:");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+    }
     p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), " r:");
-    fmt_uint_pad(num, sizeof(num), snap->tip_raw, 4u, '0');
-    (void)fmt_append_str(line, p, sizeof(line), num);
-    gfx_draw_text((uint16_t)(CARD_X[0] + 6u), (uint16_t)(CARD_Y + 37u), line, COL_MUTED, COL_CARD, 1u);
-
-    gfx_draw_sparkline(
-        (uint16_t)(CARD_X[0] + 5u), (uint16_t)(CARD_Y + 50u),
-        (uint16_t)(CARD_W - 10u), 32u,
-        snap->tip_hist, snap->hist_count, snap->hist_head, 4095u,
-        COL_CYAN, COL_SPARK_BG
-    );
-
-    /* Card 2: CUR (PC1 / CH11) */
-    fmt_int_pad(num, sizeof(num), snap->cur_ma, 6u, ' ', 1u);
-    gfx_draw_text((uint16_t)(CARD_X[1] + 6u), (uint16_t)(CARD_Y + 18u), num, COL_TEXT, COL_CARD, 2u);
-    gfx_draw_text((uint16_t)(CARD_X[1] + 80u), (uint16_t)(CARD_Y + 24u), "mA", COL_MUTED, COL_CARD, 1u);
+    p = fmt_append_str(line, p, sizeof(line), "C");
+    gfx_draw_text(14u, 84u, line, (h->state == HEATER_SLEEP) ? COL_CYAN : COL_TEXT, COL_CARD, 2u);
 
     p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "mV:");
-    fmt_uint_pad(num, sizeof(num), snap->cur_mv, 4u, ' ');
+    if (h->state == HEATER_SLEEP) {
+        p = fmt_append_str(line, p, sizeof(line), "(SET:");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C)");
+    } else if (h->armed == 0u) {
+        p = fmt_append_str(line, p, sizeof(line), "(STANDBY) ");
+    } else {
+        p = fmt_append_str(line, p, sizeof(line), h->is_f245 ? "(F245 PID)" : "(F210 CAP)");
+    }
+    gfx_draw_text(114u, 88u, line, COL_MUTED, COL_CARD, 1u);
+
+    /* Calibration & raw TC info */
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "TC:");
+    fmt_uint_pad(num, sizeof(num), snap->tip_avg, 4u, ' ');
     p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), " r:");
-    fmt_uint_pad(num, sizeof(num), snap->cur_avg, 4u, '0');
-    (void)fmt_append_str(line, p, sizeof(line), num);
-    gfx_draw_text((uint16_t)(CARD_X[1] + 6u), (uint16_t)(CARD_Y + 37u), line, COL_MUTED, COL_CARD, 1u);
+    p = fmt_append_str(line, p, sizeof(line), " Z:");
+    fmt_uint_pad(num, sizeof(num), h->cur_zero_mv, 4u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    p = fmt_append_str(line, p, sizeof(line), " CAL:");
+    fmt_int_pad(num, sizeof(num), st->cal_offset_c, 3u, ' ', 1u);
+    p = fmt_append_str(line, p, sizeof(line), num);
+    (void)fmt_append_str(line, p, sizeof(line), "C");
+    gfx_draw_text(14u, 108u, line, COL_MUTED, COL_CARD, 1u);
 
-    gfx_draw_sparkline(
-        (uint16_t)(CARD_X[1] + 5u), (uint16_t)(CARD_Y + 50u),
-        (uint16_t)(CARD_W - 10u), 32u,
-        snap->cur_hist, snap->hist_count, snap->hist_head, 4095u,
-        COL_EMERALD, COL_SPARK_BG
-    );
+    /* Hero Right: Duty bar + Rail + Current + Stand */
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "PWR:");
+    fmt_uint_pad(num, sizeof(num), h->duty_pct, 3u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    p = fmt_append_str(line, p, sizeof(line), "% (");
+    fmt_uint_pad(num, sizeof(num), h->duty_ticks, 2u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    (void)fmt_append_str(line, p, sizeof(line), "t)  ");
+    gfx_draw_text(204u, 36u, line, COL_TEXT, COL_CARD, 1u);
 
-    /* Card 3: AUX (PA3 / CH3) */
-    fmt_uint_pad(num, sizeof(num), snap->aux_avg, 4u, ' ');
-    gfx_draw_text((uint16_t)(CARD_X[2] + 6u), (uint16_t)(CARD_Y + 18u), num, COL_TEXT, COL_CARD, 2u);
-    gfx_draw_text((uint16_t)(CARD_X[2] + 58u), (uint16_t)(CARD_Y + 24u), "raw", COL_MUTED, COL_CARD, 1u);
+    uint16_t bar_w = (uint16_t)(((uint32_t)h->duty_pct * 100u) / 100u);
+    if (bar_w > 100u) bar_w = 100u;
+    if (bar_w > 0u) {
+        gfx_fill_rect(205u, 48u, bar_w, 9u, st_fg);
+    }
+    if (bar_w < 100u) {
+        gfx_fill_rect((uint16_t)(205u + bar_w), 48u, (uint16_t)(100u - bar_w), 9u, COL_SPARK_BG);
+    }
+
+    uint16_t rail_col = (h->rail_mv >= RAIL_MIN_MV && h->rail_mv <= RAIL_MAX_MV) ? COL_EMERALD : COL_RED;
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "RAIL:");
+    p = append_fixed_1(line, p, sizeof(line), (int32_t)((h->rail_mv + 50u) / 100u), 2u);
+    p = fmt_append_str(line, p, sizeof(line), "V      ");
+    gfx_draw_text(204u, 65u, line, rail_col, COL_CARD, 1u);
 
     p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "mV:");
-    fmt_uint_pad(num, sizeof(num), snap->aux_mv, 4u, ' ');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), " r:");
-    fmt_uint_pad(num, sizeof(num), snap->aux_raw, 4u, '0');
-    (void)fmt_append_str(line, p, sizeof(line), num);
-    gfx_draw_text((uint16_t)(CARD_X[2] + 6u), (uint16_t)(CARD_Y + 37u), line, COL_MUTED, COL_CARD, 1u);
+    p = fmt_append_str(line, p, sizeof(line), "CUR :");
+    p = append_ma_as_amps(line, p, sizeof(line), h->cur_ma, 1u);
+    p = fmt_append_str(line, p, sizeof(line), "A    ");
+    gfx_draw_text(204u, 79u, line, COL_TEXT, COL_CARD, 1u);
 
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "PEAK:");
+    p = append_ma_as_amps(line, p, sizeof(line), h->cur_peak_ma, 0u);
+    p = fmt_append_str(line, p, sizeof(line), "A    ");
+    gfx_draw_text(204u, 93u, line, COL_MUTED, COL_CARD, 1u);
+
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "STND:");
+    if (h->in_stand != 0u) {
+        p = fmt_append_str(line, p, sizeof(line), h->sleep_en ? "IN (SLP)" : "IN (IGN)");
+    } else {
+        p = fmt_append_str(line, p, sizeof(line), "OUT     ");
+    }
+    gfx_draw_text(204u, 107u, line, h->in_stand ? COL_CYAN : COL_MUTED, COL_CARD, 1u);
+
+    /* Middle Card: Sparkline (150x60) */
     gfx_draw_sparkline(
-        (uint16_t)(CARD_X[2] + 5u), (uint16_t)(CARD_Y + 50u),
-        (uint16_t)(CARD_W - 10u), 32u,
-        snap->aux_hist, snap->hist_count, snap->hist_head, 4095u,
-        COL_AMBER, COL_SPARK_BG
+        13u, 143u, 150u, 60u,
+        snap->temp_hist, snap->hist_count, snap->hist_head, TEMP_HARD_CUTOFF_C,
+        (h->state == HEATER_FAULT) ? COL_RED : COL_CYAN,
+        COL_SPARK_BG
     );
 
-    /* Key tiles */
-    for (uint32_t i = 0u; i < KEY_COUNT; ++i) {
-        uint8_t on = (inp->held_mask & (1u << i)) != 0u;
+    /* Middle Right: Presets */
+    static const uint16_t preset_x[3] = { 172u, 217u, 262u };
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        p = 0u;
+        fmt_uint_pad(num, sizeof(num), (uint32_t)(i + 1u), 1u, '0');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), ":");
+        fmt_uint_pad(num, sizeof(num), st->presets_c[i], 3u, '0');
+        (void)fmt_append_str(line, p, sizeof(line), num);
+        uint8_t active = (st->active_preset == i || h->target_c == st->presets_c[i]) ? 1u : 0u;
         gfx_draw_badge(
-            KEY_TILE_X[i], 130u, 56u, 22u, KEY_LABELS[i],
-            on ? COL_CYAN : COL_TEXT,
-            on ? COL_CYAN_DARK : COL_BG,
-            on ? COL_CYAN : COL_BORDER
+            preset_x[i], 132u, 42u, 18u, line,
+            active ? COL_CYAN : COL_MUTED,
+            active ? COL_CYAN_DARK : COL_BG,
+            active ? COL_CYAN : COL_BORDER
         );
     }
 
-    /* GPIO / EXINT status line */
+    /* Fault / Toast / Raw ADC / Uptime lines */
+    uint16_t non_settle = h->fault_mask & (uint16_t)~FAULT_SETTLING;
     p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "PB5(SLP):");
-    p = fmt_append_str(line, p, sizeof(line), inp->pb5_sleep ? "1" : "0");
-    p = fmt_append_str(line, p, sizeof(line), " cnt:");
-    fmt_uint_pad(num, sizeof(num), inp->pb5_edges % 100000u, 5u, '0');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), "  PB0:");
-    p = fmt_append_str(line, p, sizeof(line), inp->pb0_raw ? "1" : "0");
-    p = fmt_append_str(line, p, sizeof(line), "  PB2:");
-    p = fmt_append_str(line, p, sizeof(line), inp->pb2_raw ? "1" : "0");
-    p = fmt_append_str(line, p, sizeof(line), "  HDL:");
-    (void)fmt_append_str(line, p, sizeof(line), inp->pb6_handle ? "1" : "0");
-    gfx_draw_text(14u, 159u, line, COL_TEXT, COL_CARD, 1u);
+    p = fmt_append_str(line, p, sizeof(line), "FLT:");
+    p = fmt_append_str(line, p, sizeof(line), heater_fault_name(h->fault_mask));
+    while (p < 20u) line[p++] = ' ';
+    line[p] = '\0';
+    gfx_draw_text(172u, 156u, line, non_settle ? COL_RED : COL_EMERALD, COL_CARD, 1u);
 
-    /* Safety, backlight & LED line */
+    if (st->save_toast_active != 0u) {
+        gfx_draw_text(172u, 170u, "SAVED TO FLASH!     ", COL_EMERALD, COL_CARD, 1u);
+    } else {
+        p = 0u;
+        p = fmt_append_str(line, p, sizeof(line), "BL:");
+        fmt_uint_pad(num, sizeof(num), st->backlight_pct, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "%  SLP:");
+        p = fmt_append_str(line, p, sizeof(line), h->sleep_en ? "ON " : "OFF");
+        p = fmt_append_str(line, p, sizeof(line), "   ");
+        gfx_draw_text(172u, 170u, line, COL_MUTED, COL_CARD, 1u);
+    }
+
     p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "PA2(HTR):0 [LOCKED]  BL:");
-    fmt_uint_pad(num, sizeof(num), st->backlight_pct, 3u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), "CUR:");
+    fmt_uint_pad(num, sizeof(num), snap->cur_avg, 4u, ' ');
     p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), "%  LED:0x");
-    fmt_hex8(num, sizeof(num), st->led_mask);
-    (void)fmt_append_str(line, p, sizeof(line), num);
-    gfx_draw_text(14u, 175u, line, COL_RED, COL_CARD, 1u);
+    p = fmt_append_str(line, p, sizeof(line), " AUX:");
+    fmt_uint_pad(num, sizeof(num), snap->aux_avg, 4u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    p = fmt_append_str(line, p, sizeof(line), "  ");
+    gfx_draw_text(172u, 184u, line, COL_MUTED, COL_CARD, 1u);
 
-    /* Stream / USB debug & uptime line */
     uint32_t total_s = st->uptime_ms / 1000u;
     uint32_t hh = (total_s / 3600u) % 100u;
     uint32_t mm = (total_s / 60u) % 60u;
     uint32_t ss = total_s % 60u;
     p = 0u;
-    if (st->usb_connected != 0u) {
-        p = fmt_append_str(line, p, sizeof(line), "STREAM:");
-        p = fmt_append_str(line, p, sizeof(line), st->stream_enabled ? "ON " : "OFF");
-        p = fmt_append_str(line, p, sizeof(line), " (");
-        fmt_uint_pad(num, sizeof(num), st->stream_interval_ms, 4u, ' ');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), "ms)  UP:");
-    } else {
-        p = fmt_append_str(line, p, sizeof(line), "USB I:");
-        fmt_uint_pad(num, sizeof(num), st->usb_irq_cnt % 1000u, 3u, '0');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), " R:");
-        fmt_uint_pad(num, sizeof(num), st->usb_rst_cnt % 100u, 2u, '0');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), " S:");
-        fmt_uint_pad(num, sizeof(num), st->usb_setup_cnt % 100u, 2u, '0');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), " G:");
-        fmt_hex8(num, sizeof(num), st->usb_gccfg_hi);
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), "  UP:");
-    }
+    p = fmt_append_str(line, p, sizeof(line), "UP:");
     fmt_uint_pad(num, sizeof(num), hh, 2u, '0');
     p = fmt_append_str(line, p, sizeof(line), num);
     p = fmt_append_str(line, p, sizeof(line), ":");
@@ -210,8 +340,34 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     p = fmt_append_str(line, p, sizeof(line), ":");
     fmt_uint_pad(num, sizeof(num), ss, 2u, '0');
     p = fmt_append_str(line, p, sizeof(line), num);
-    if (st->usb_connected != 0u) {
-        (void)fmt_append_str(line, p, sizeof(line), "     ");
+    p = fmt_append_str(line, p, sizeof(line), "  LED:");
+    fmt_hex8(num, sizeof(num), st->led_mask);
+    p = fmt_append_str(line, p, sizeof(line), num);
+    (void)fmt_append_str(line, p, sizeof(line), " ");
+    gfx_draw_text(172u, 197u, line, COL_MUTED, COL_CARD, 1u);
+
+    /* Bottom verified 5-button bar (Left->Right: PC11, PC12, PD2, PB3, PB4) */
+    static const uint16_t btn_x[5] = { 4u, 67u, 130u, 195u, 258u };
+    static const uint16_t btn_w[5] = { 58u, 58u, 60u, 58u, 58u };
+    static const uint8_t  btn_bit[5] = { KEY_BIT_PC11, KEY_BIT_PC12, KEY_BIT_PD2, KEY_BIT_PB3, KEY_BIT_PB4 };
+    const char *btn_lbl[5] = {
+        non_settle ? "CLR" : "CH",
+        "-5C",
+        h->armed ? "STOP" : "HEAT",
+        "+5C",
+        "MENU"
+    };
+
+    for (uint32_t i = 0u; i < 5u; ++i) {
+        uint8_t held = (inp->held_mask & btn_bit[i]) != 0u;
+        uint16_t fg = held ? COL_CYAN : COL_TEXT;
+        uint16_t bg = held ? COL_CYAN_DARK : COL_CARD;
+        uint16_t bd = held ? COL_CYAN : COL_BORDER;
+        if (!held && i == 2u) {
+            fg = h->armed ? COL_RED : COL_EMERALD;
+            bg = h->armed ? COL_RED_DARK : COL_GREEN_DARK;
+            bd = fg;
+        }
+        gfx_draw_badge(btn_x[i], 216u, btn_w[i], 20u, btn_lbl[i], fg, bg, bd);
     }
-    gfx_draw_text(14u, 191u, line, COL_MUTED, COL_CARD, 1u);
 }

@@ -1,6 +1,6 @@
-# OpenDWS-200 USB-CDC Telemetrie- & Steuerungsprotokoll
+# OpenDWS-200 USB-CDC Telemetrie- & Steuerungsprotokoll (Phase 2)
 
-Im laufenden Betrieb meldet sich OpenDWS-200 am USB-C-Port als **USB CDC-ACM (Virtueller COM-Port)** mit `VID 0x2E3C` / `PID 0x5740` (`OpenDWS-200 Bring-Up CDC`).
+Im laufenden Betrieb meldet sich OpenDWS-200 am USB-C-Port als **USB CDC-ACM (Virtueller COM-Port)** mit `VID 0x2E3C` / `PID 0x5740` (`OpenDWS-200 Phase-2 CDC`).
 
 - **Zeilenformat:** ASCII, abgeschlossen mit `\r` oder `\n` (Antworten enden mit `\r\n`).
 - **Groß-/Kleinschreibung:** Kommandos sind case-insensitiv.
@@ -12,30 +12,30 @@ Im laufenden Betrieb meldet sich OpenDWS-200 am USB-C-Port als **USB CDC-ACM (Vi
 
 | Befehl | Beschreibung | Beispielantwort |
 | :--- | :--- | :--- |
-| `HELP` oder `?` | Liste der verfügbaren Befehle | `OK CMDS: HELP \| INFO \| STAT \| ...` |
-| `INFO` | Firmware-Version, MCU-Infos, Safety-Status | `INFO fw=v0.1.0-bringup mcu=AT32F415RCT7 clk=144MHz safe_mode=1 heater=LOCKED_OFF uptime_ms=12540` |
-| `STAT` | Einmaliger Telemetrie-Schnappschuss | `STAT ms=12540 tip_adc=120 tip_mv=97 cur_adc=2048 cur_mv=1650 cur_ma=0 aux_adc=1500 aux_mv=1209 keys=0x00 pb5=1 pb5_cnt=3 pb6=1 pb0=1 pb2=0 bl=80 led=0x00 heater=0` |
-| `STREAM ON` | Aktiviert zyklischen `STAT`-Stream | `OK STREAM=ON INTERVAL=100` |
-| `STREAM OFF` | Stoppt zyklischen Stream | `OK STREAM=OFF` |
-| `STREAM <50..2000>` | Intervall in ms setzen + aktivieren | `OK STREAM=ON INTERVAL=200` |
-| `BL <0..100>` | Display-Backlight in % setzen | `OK BL=60` |
-| `BEEP [10..1000]` | Piezo-Buzzer für `ms` (Standard 80 ms) | `OK BEEP=150` |
-| `LED <0..255\|0x..>` | 8 Front-LEDs per Bitmaske schalten | `OK LED=0xA5` |
-| `REBOOT` | System-Reset auslösen | `OK REBOOT` |
-| `HEAT*`/`TEMP*`/`SET*`/`PID*` | **Phase-1-Sperre** (Heizung deaktiviert) | `ERR HEATER_LOCKED_IN_SAFE_MODE` |
+| `HELP` oder `?` | Liste aller Befehle | `OK CMDS: HELP \| INFO \| STAT \| ...` |
+| `INFO` | Firmware, MCU, Griff, Zustand, 24-V-Rail, Uptime | `INFO fw=v0.2.0-phase2 mcu=AT32F415RCT7 clk=144MHz safe_mode=0 handle=F245 state=STANDBY rail_mv=22940 uptime_ms=12540` |
+| `STAT` | Vollständiger Telemetrie-Schnappschuss | `STAT ms=12540 state=HEAT fault=0x00(NONE) handle=F245 tip_c=300.2 target_c=300 act_c=300 duty=45 ticks=40 rail_mv=22928 ...` |
+| `HEAT <ON\|OFF\|1\|0>` | Heizung aktivieren / in `STANDBY` setzen (verweigert bei `NO_24V_RAIL` oder aktivem Fault) | `OK HEAT=ON` oder `ERR NO_24V_RAIL` |
+| `TEMP <100..450>` | Solltemperatur in °C setzen (`SET <t>` als Alias) | `OK TEMP=320` |
+| `PRESET <1..3>` | Preset CH1 (`200`), CH2 (`300`) oder CH3 (`350`) laden | `OK PRESET=2 TEMP=300` |
+| `SLEEP <ON\|OFF\|100..250>` | Sleep-Ständer aktivieren/deaktivieren oder Sleep-Temp setzen | `OK SLEEP=ON` / `OK SLEEP=150` |
+| `CAL <-50..50>` | Temperatur-Offset in °C für den aktuell erkannten Griff setzen | `OK CAL=2` |
+| `CLEAR` | Gelatchte Faults (`OVERCUR`, `OVERLOAD`, `OVERTEMP`, `RUNAWAY`) zurücksetzen | `OK CLEAR` |
+| `SAVE` | Aktuelle Settings sicher (inkl. `PA2=LOW`-Pause) im Flash `0x0803F800` speichern | `OK SAVE` |
+| `STREAM [ON\|OFF\|50..2000]` | Zyklischen `STAT`-Stream steuern | `OK STREAM=ON INTERVAL=100` |
+| `BL <0..100>` | Display-Backlight in % setzen | `OK BL=80` |
+| `BEEP [10..1000]` | Piezo-Buzzer für `ms` (Standard `80 ms`) | `OK BEEP=80` |
+| `LED <0..255\|0x..\|AUTO>` | Front-LEDs manuell setzen oder zurück in `AUTO`-Modus (Leistungs-/Fault-Anzeige) | `OK LED=AUTO` |
+| `REBOOT` | Watchdog-/System-Reset auslösen | `OK REBOOT` |
 
 ---
 
-## Felder von `STAT`
+## Wichtige Felder von `STAT`
 
-- `ms`: Uptime in Millisekunden seit Boot.
-- `tip_adc` / `tip_mv`: Gefilterter 16-Sample-Mittelwert auf `PC0` (`ADC1_CH10`, 0..4095) und umgerechnete Millivolt.
-- `cur_adc` / `cur_mv` / `cur_ma`: Stromsensor auf `PC1` (`ADC1_CH11`, 66 mV/A um 1,65 V Nullpunkt).
-- `aux_adc` / `aux_mv`: 3. Analogkanal auf `PA3` (`ADC1_CH3`).
-- `keys`: Entprellte 5-Bit-Tastenmaske (`bit0=PD2, bit1=PB3, bit2=PB4, bit3=PC12, bit4=PC11`).
-- `pb5` / `pb5_cnt`: Aktueller Pegel von `PB5` (Sleep-Ablage) und Interrupt-Flankenzähler (`EXINT5`).
-- `pb6`: Griff-Erkennung (`F245` / `F210`).
-- `pb0`, `pb2`: Zusätzliche Diagnose-Eingänge.
-- `bl`: Display-Helligkeit (`0..100` %).
-- `led`: Aktive Front-LED-Bitmaske (`0x00..0xFF`).
-- `heater`: In Phase 1 fest `0` (`PA2 = LOW`).
+- `state`: `STANDBY`, `SLEEP`, `PROBE`, `HEAT` oder `FAULT`.
+- `fault`: Aktive Bitmaske und Primärfehler (`NONE`, `SETTLING`, `OPEN_TIP`, `NO_24V`, `OVERVOLT`, `OVERCUR`, `OVERLOAD`, `OVERTEMP`, `RUNAWAY`).
+- `handle`: Aktiver Handgriff (`F245` bei `PB6=1`, `F210` bei `PB6=0`).
+- `tip_c`, `target_c`, `act_c`: Gefilterte Spitzen-Isttemperatur in °C, eingestellter Sollwert und aktiver Sollwert (inkl. Sleep-Absenkung).
+- `duty`, `ticks`: Aktive PWM-Aussteuerung in % sowie Pulsbreite in `91-µs`-Ticks.
+- `rail_mv`: Gemessene 24-V-Versorgungsschiene (`PA3 × 16`; `< 15000 mV` sperrt die Heizung automatisch).
+- `cur_ma`, `cur_pk`, `zero_mv`: Live-Strom, Spitzenstrom bei `364 µs` und automatisch nachgeführter Hall-Nullpunkt (`PC1`).

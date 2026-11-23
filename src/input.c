@@ -110,6 +110,7 @@ void input_init(void) {
     EXINT_POLCFG2 |= (1u << 5);
     EXINT_INTSTS = (1u << 5);
     EXINT_INTEN |= (1u << 5);
+    irq_set_priority(EXINT9_5_IRQn, 0x90u);
     irq_enable(EXINT9_5_IRQn);
 }
 

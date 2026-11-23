@@ -28,7 +28,7 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 
 | Pin | Funktion | Modus / Konfiguration | Beschreibung |
 | :--- | :--- | :--- | :--- |
-| `PA2` | **Heizung (Safety Lockout)** | Output Push-Pull `LOW` | **In Phase 1 hart auf `LOW` gesperrt**; Stock: DC-Puls `91 µs`/`10 ms` (siehe [phase2-control-analysis.md](phase2-control-analysis.md)) |
+| `PA2` | **Heizung (`TMR1`/`TMR2`)** | Output Push-Pull (Start `LOW`) | Startet immer im sicheren `STANDBY` (`LOW`); gepulste `10 ms`-Regelung über `TMR1` (Blanking) + `TMR2` (`91 µs`, siehe [phase2-control-analysis.md](phase2-control-analysis.md)) |
 | `PB1` | Soft-Power-Latch | Output Push-Pull `HIGH` | Hält Versorgung aktiv; wird über `PB0`-Flankensequenz auf `LOW` abgeschaltet |
 | `PB12` | Display `CS` | Output Push-Pull (`HIGH` idle) | ST7789V Chip Select |
 | `PB13` | Display `SCK` | AF Push-Pull 50 MHz | `SPI2_SCK` (Mode 3, 18 MHz) |
@@ -41,14 +41,14 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PC0` | `ADC1_IN10` | Analog (239,5 Cycl.) | Lötspitzen-Thermoelement (Blanking `1,0 ms` nach `PA2 = LOW`) |
 | `PC1` | `ADC1_IN11` | Analog (55,5 Cycl.) | Hall-Stromsensor (`66 mV/A`, Nullpunkt `1,65 V`, Kurzschluss-Check nach `364 µs`) |
 | `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | 24-V-Rail-Monitor (`V_rail = adc_V * 16,0`; `1,434 V × 16 = 22,94 V`) |
-| `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 1: Buzzer-Testton |
-| `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 1: USB-Stream an/aus |
-| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Phase 1: LED-Lauflicht an/aus |
-| `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `-10%` (`SWJTAG_CONF=0b010`!) |
-| `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `+10%` (`SWJTAG_CONF=0b010`!) |
-| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (IRQ 23) |
-| `PB6` | Griff-Erkennung | Input Pull-Up | Unterscheidet die beiden Handgrifftypen (`handle_type 1` bei `HIGH` vs. `0` bei `LOW`) |
-| `PC13, PC14, PC15` | Griff-Mux / Gain-Steuerung | Output Push-Pull | Analogbereich-Umschaltung (`PB6=1`: `PC14=1, PC13/15=0`; `PB6=0`: `PC14=0, PC13/15=1`) |
+| `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 2: Preset-Wechsel (`CH1/2/3`) bzw. `CLEAR` bei Fault |
+| `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 2: Solltemperatur `-5 °C` (Langdruck `-25 °C`) |
+| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Phase 2: `HEAT` ↔ `STANDBY` umschalten; Langdruck speichert im Flash |
+| `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Phase 2: Solltemperatur `+5 °C` (Langdruck `+25 °C`) |
+| `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Phase 2: Backlight-Stufen `20/50/80/100 %`; Langdruck USB-Stream |
+| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (`LOW` = im Ständer, `HIGH` = entnommen) |
+| `PB6` | Griff-Erkennung | Input Pull-Up | **Verifiziert:** `HIGH` (`1`) = **`F245`**, `LOW` (`0`) = **`F210`** |
+| `PC13, PC14, PC15` | Griff-Mux / Gain-Steuerung | Output Push-Pull | Analogbereich-Umschaltung via Backup-Domain-Unlock (`F245`: `PC14=1, PC13/15=0`; `F210`: `PC14=0, PC13/15=1`) |
 | `PB0` | Soft-Power-Taster / Diag | Input Pull-Up | Flankensequenz steuert Power-Latch `PB1` |
 | `PB2` | Diag-Eingang | Input Pull-Down | Live-Monitoring |
 | `PB10, PB11` | Bit-Bang `I2C` | Output / Open-Drain | Nebenbus für Slave-Adresse `0x78` (optionales Power-/Display-IC) |

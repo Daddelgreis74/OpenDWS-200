@@ -29,7 +29,7 @@ void gfx_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t colo
 
 void gfx_draw_char(uint16_t x, uint16_t y, char ch, uint16_t fg, uint16_t bg, uint8_t scale) {
     if (scale == 0u) scale = 1u;
-    if (scale > 3u) scale = 3u;
+    if (scale > 5u) scale = 5u;
 
     uint16_t gw = (uint16_t)(FONT5X7_ADVANCE * scale);
     uint16_t gh = (uint16_t)(FONT5X7_HEIGHT * scale);
@@ -53,7 +53,7 @@ void gfx_draw_char(uint16_t x, uint16_t y, char ch, uint16_t fg, uint16_t bg, ui
 void gfx_draw_text(uint16_t x, uint16_t y, const char *str, uint16_t fg, uint16_t bg, uint8_t scale) {
     if (str == NULL) return;
     if (scale == 0u) scale = 1u;
-    if (scale > 3u) scale = 3u;
+    if (scale > 5u) scale = 5u;
 
     uint16_t step = (uint16_t)(FONT5X7_ADVANCE * scale);
     uint16_t cur_x = x;

@@ -13,9 +13,59 @@ uint32_t sensors_adc_to_mv(uint16_t raw) {
     return ((uint32_t)raw * 3300u + 2047u) / 4095u;
 }
 
-int32_t sensors_cur_adc_to_ma(uint16_t raw) {
+uint32_t sensors_rail_adc_to_mv(uint16_t aux_raw) {
+    return sensors_adc_to_mv(aux_raw) * 16u;
+}
+
+int32_t sensors_cur_adc_to_ma_zero(uint16_t raw, uint16_t zero_mv) {
     int32_t mv = (int32_t)sensors_adc_to_mv(raw);
-    return ((mv - 1650) * 1000) / 66;
+    return ((mv - (int32_t)zero_mv) * 1000) / 66;
+}
+
+int32_t sensors_cur_adc_to_ma(uint16_t raw) {
+    return sensors_cur_adc_to_ma_zero(raw, 1650u);
+}
+
+int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_offset_deci_c) {
+    /*
+     * Stock APP_DWS_200_V1.5 (0x0800FD84) 5-segment piecewise linear LUTs:
+     *   F245 (handle_type=1): (0,0), (1100,150C), (1870,250C), (2610,350C), (3340,450C)
+     *   F210 (handle_type=0): (0,0), ( 276,150C), ( 608,250C), ( 882,350C), (1210,450C)
+     */
+    static const uint16_t f245_x[5] = { 0u, 1100u, 1870u, 2610u, 3340u };
+    static const uint16_t f210_x[5] = { 0u,  276u,  608u,  882u, 1210u };
+    static const int32_t  lut_y[5]  = { 0,  1500,  2500,  3500,  4500  };
+
+    if (raw > 4095u) {
+        raw = 4095u;
+    }
+
+    const uint16_t *kx = (is_f245 != 0u) ? f245_x : f210_x;
+    int32_t dc;
+
+    if (raw >= kx[4]) {
+        int32_t dx = (int32_t)(kx[4] - kx[3]);
+        int32_t dy = lut_y[4] - lut_y[3];
+        int32_t num = ((int32_t)raw - (int32_t)kx[4]) * dy;
+        dc = lut_y[4] + (num + (dx / 2)) / dx;
+    } else {
+        uint32_t seg = 0u;
+        while (seg < 3u && raw > kx[seg + 1u]) {
+            seg++;
+        }
+        int32_t dx = (int32_t)(kx[seg + 1u] - kx[seg]);
+        int32_t dy = lut_y[seg + 1u] - lut_y[seg];
+        int32_t num = ((int32_t)raw - (int32_t)kx[seg]) * dy;
+        dc = lut_y[seg] + (num + (dx / 2)) / dx;
+    }
+
+    dc += (int32_t)cal_offset_deci_c;
+    if (dc < 0) {
+        dc = 0;
+    } else if (dc > 9999) {
+        dc = 9999;
+    }
+    return dc;
 }
 
 void sensors_filter_init(sensor_filter_t *f) {
@@ -64,12 +114,14 @@ void sensors_state_init(sensor_state_t *st) {
     st->snap.aux_raw = 0u;
     st->snap.aux_avg = 0u;
     st->snap.aux_mv = 0u;
+    st->snap.rail_mv = 0u;
     st->snap.hist_head = 0u;
     st->snap.hist_count = 0u;
     for (uint32_t i = 0u; i < SENSOR_HISTORY_LEN; ++i) {
         st->snap.tip_hist[i] = 0u;
         st->snap.cur_hist[i] = 0u;
         st->snap.aux_hist[i] = 0u;
+        st->snap.temp_hist[i] = 0u;
     }
 }
 
@@ -100,6 +152,7 @@ void sensors_update_snapshot(
     st->snap.aux_raw = aux_raw;
     st->snap.aux_avg = sensors_filter_avg(&st->aux_f);
     st->snap.aux_mv = sensors_adc_to_mv(st->snap.aux_avg);
+    st->snap.rail_mv = sensors_rail_adc_to_mv(st->snap.aux_avg);
 
     st->snap.tip_hist[st->snap.hist_head] = st->snap.tip_avg;
     st->snap.cur_hist[st->snap.hist_head] = st->snap.cur_avg;
@@ -111,6 +164,19 @@ void sensors_update_snapshot(
 
     if (out != NULL) {
         *out = st->snap;
+    }
+}
+
+void sensors_record_temp_c(sensor_state_t *st, uint16_t temp_c, sensor_snapshot_t *out) {
+    if (st == NULL) return;
+    if (temp_c > 500u) temp_c = 500u;
+    /* Store into the most recently pushed slot (hist_head - 1) */
+    uint8_t idx = (st->snap.hist_head == 0u)
+        ? (uint8_t)(SENSOR_HISTORY_LEN - 1u)
+        : (uint8_t)(st->snap.hist_head - 1u);
+    st->snap.temp_hist[idx] = temp_c;
+    if (out != NULL) {
+        out->temp_hist[idx] = temp_c;
     }
 }
 

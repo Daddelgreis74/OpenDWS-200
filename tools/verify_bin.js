@@ -62,6 +62,8 @@ function main() {
   const hardFault = buf.readUInt32LE(12);
   const sysTick = buf.readUInt32LE(15 * 4);
   const exint9_5 = buf.readUInt32LE(39 * 4);
+  const tmr1Ovf = buf.readUInt32LE(41 * 4);
+  const tmr2 = buf.readUInt32LE(44 * 4);
   const otgfs1 = buf.readUInt32LE(83 * 4);
   const defaultIrq = buf.readUInt32LE(16 * 4);
 
@@ -70,6 +72,8 @@ function main() {
     ['HardFault_Handler', hardFault],
     ['SysTick_Handler', sysTick],
     ['EXINT9_5_IRQHandler', exint9_5],
+    ['TMR1_OVF_TMR10_IRQHandler', tmr1Ovf],
+    ['TMR2_IRQHandler', tmr2],
     ['OTGFS1_IRQHandler', otgfs1]
   ]) {
     if (!isThumbFlashAddr(vec, buf.length)) {
@@ -77,7 +81,7 @@ function main() {
     }
   }
 
-  if (sysTick === defaultIrq || exint9_5 === defaultIrq || otgfs1 === defaultIrq) {
+  if (sysTick === defaultIrq || exint9_5 === defaultIrq || tmr1Ovf === defaultIrq || tmr2 === defaultIrq || otgfs1 === defaultIrq) {
     fail('Critical IRQ handler points to Default_Handler');
   }
 
@@ -118,7 +122,7 @@ function main() {
 
   console.log(
     `VERIFY OK: ${binPath} (${buf.length} bytes, SP=0x${sp.toString(16)}, Reset=0x${reset.toString(16)}, ` +
-    `SysTick=0x${sysTick.toString(16)}, EXINT5=0x${exint9_5.toString(16)}, OTGFS1=0x${otgfs1.toString(16)})`
+    `SysTick=0x${sysTick.toString(16)}, TMR1=0x${tmr1Ovf.toString(16)}, TMR2=0x${tmr2.toString(16)}, OTGFS1=0x${otgfs1.toString(16)})`
   );
 }
 

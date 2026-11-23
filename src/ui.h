@@ -1,21 +1,23 @@
 #pragma once
 
+#include "heater.h"
 #include "input.h"
 #include "sensors.h"
 
 #include <stdint.h>
 
 typedef struct {
+    heater_status_t hst;
+    uint16_t presets_c[3];
+    uint8_t active_preset; /* 0..2 or 0xFF if custom temp */
+    int16_t cal_offset_c;
     uint8_t usb_connected;
     uint8_t stream_enabled;
     uint16_t stream_interval_ms;
     uint8_t backlight_pct;
     uint8_t led_mask;
+    uint8_t save_toast_active;
     uint32_t uptime_ms;
-    uint16_t usb_irq_cnt;
-    uint16_t usb_rst_cnt;
-    uint16_t usb_setup_cnt;
-    uint8_t  usb_gccfg_hi;
 } ui_status_t;
 
 void ui_draw_static(void);

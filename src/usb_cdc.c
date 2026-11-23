@@ -123,7 +123,7 @@ static const uint8_t g_str_mfg[16] = {
 static const uint8_t g_str_prod[50] = {
     50u, 0x03u,
     'O',0,'p',0,'e',0,'n',0,'D',0,'W',0,'S',0,'-',0,'2',0,'0',0,'0',0,' ',0,
-    'B',0,'r',0,'i',0,'n',0,'g',0,'-',0,'U',0,'p',0,' ',0,'C',0,'D',0,'C',0
+    'P',0,'h',0,'a',0,'s',0,'e',0,'-',0,'2',0,' ',0,'C',0,'D',0,'C',0
 };
 static const uint8_t g_str_ser[20] = {
     20u, 0x03u, 'D',0,'W',0,'S',0,'2',0,'0',0,'0',0,'-',0,'P',0,'1',0
@@ -577,14 +577,15 @@ void usb_cdc_init(void) {
     /* Soft connect (clear SDISCON) and enable global OTG interrupt */
     OTG_DCTL &= ~(1u << 1);
     OTG_GAHBCFG = (1u << 0);
+    irq_set_priority(OTGFS1_IRQn, 0x80u);
     irq_enable(OTGFS1_IRQn);
 }
 
 void usb_cdc_poll(void) {
     if (!g_configured || g_ep1_tx_busy) return;
-    __asm__ volatile("cpsid i");
+    irq_disable(OTGFS1_IRQn);
     ep1_start_tx_locked();
-    __asm__ volatile("cpsie i");
+    irq_enable(OTGFS1_IRQn);
 }
 
 uint8_t usb_cdc_is_connected(void) {
@@ -608,7 +609,7 @@ size_t usb_cdc_write(const uint8_t *data, size_t len) {
         return 0u;
     }
     size_t written = 0u;
-    __asm__ volatile("cpsid i");
+    irq_disable(OTGFS1_IRQn);
     for (size_t i = 0u; i < len; ++i) {
         uint16_t next = (uint16_t)((g_tx_head + 1u) % TX_RING_SIZE);
         if (next == g_tx_tail) {
@@ -619,7 +620,7 @@ size_t usb_cdc_write(const uint8_t *data, size_t len) {
         written++;
     }
     ep1_start_tx_locked();
-    __asm__ volatile("cpsie i");
+    irq_enable(OTGFS1_IRQn);
     return written;
 }
 

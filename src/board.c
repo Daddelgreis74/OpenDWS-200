@@ -4,6 +4,9 @@
 #include "hw.h"
 
 static volatile uint32_t g_ticks_ms = 0u;
+static volatile uint8_t g_heater_on = 0u;
+static uint8_t g_handle_mux_f245 = 1u;
+static uint8_t g_timers_started = 0u;
 static uint32_t g_buzzer_off_ms = 0u;
 static uint8_t g_buzzer_active = 0u;
 static uint8_t g_backlight_pct = 80u;
@@ -13,12 +16,50 @@ static uint8_t g_led_mask = 0u;
 
 void SysTick_Handler(void) {
     g_ticks_ms++;
-    /* Safety invariant: keep heater PA2 LOW on every 1 ms tick */
-    GPIO_CLR(GPIOA_BASE) = (1u << 2);
 }
 
 void board_heater_force_off(void) {
     GPIO_CLR(GPIOA_BASE) = (1u << 2);
+    g_heater_on = 0u;
+}
+
+void board_heater_set(uint8_t on) {
+    if (on != 0u) {
+        GPIO_SCR(GPIOA_BASE) = (1u << 2);
+        g_heater_on = 1u;
+    } else {
+        GPIO_CLR(GPIOA_BASE) = (1u << 2);
+        g_heater_on = 0u;
+    }
+}
+
+uint8_t board_heater_is_on(void) {
+    return g_heater_on;
+}
+
+void board_set_handle_mux(uint8_t is_f245) {
+    g_handle_mux_f245 = is_f245 ? 1u : 0u;
+    if (g_handle_mux_f245 != 0u) {
+        /* F245 (PB6 == 1): PC14 HIGH, PC13/PC15 LOW */
+        GPIO_SCR(GPIOC_BASE) = (1u << 14);
+        GPIO_CLR(GPIOC_BASE) = (1u << 13) | (1u << 15);
+    } else {
+        /* F210 (PB6 == 0): PC14 LOW, PC13/PC15 HIGH */
+        GPIO_CLR(GPIOC_BASE) = (1u << 14);
+        GPIO_SCR(GPIOC_BASE) = (1u << 13) | (1u << 15);
+    }
+}
+
+uint8_t board_get_handle_mux(void) {
+    return g_handle_mux_f245;
+}
+
+uint8_t board_read_pb6_raw(void) {
+    return (GPIO_IDT(GPIOB_BASE) & (1u << 6)) != 0u ? 1u : 0u;
+}
+
+uint8_t board_read_pb5_raw(void) {
+    return (GPIO_IDT(GPIOB_BASE) & (1u << 5)) != 0u ? 1u : 0u;
 }
 
 static void board_clock_init(void) {
@@ -111,6 +152,15 @@ void board_init(void) {
     gpio_config_pin(GPIOA_BASE, 2u, GPIO_MODE_OUT_PP_50M, 0u);
     board_heater_force_off();
 
+    /* PC13, PC14, PC15: Backup-domain unlock + LEXT off -> handle mux push-pull outputs */
+    PWC_CTRL |= PWC_CTRL_BPWEN;
+    CRM_BPDC &= ~CRM_BPDC_LEXTEN;
+    PWC_CTRL &= ~PWC_CTRL_BPWEN;
+    gpio_config_pin(GPIOC_BASE, 13u, GPIO_MODE_OUT_PP_2M, 0u);
+    gpio_config_pin(GPIOC_BASE, 14u, GPIO_MODE_OUT_PP_2M, 0u);
+    gpio_config_pin(GPIOC_BASE, 15u, GPIO_MODE_OUT_PP_2M, 0u);
+    board_set_handle_mux(1u);
+
     /* PB1: Stock board enable/power latch -> output push-pull HIGH */
     gpio_config_pin(GPIOB_BASE, 1u, GPIO_MODE_OUT_PP_50M, 0u);
     GPIO_SCR(GPIOB_BASE) = (1u << 1);
@@ -142,12 +192,63 @@ void board_init(void) {
     TMR_CTRL1(TMR3_BASE) = (1u << 7) | (1u << 0); /* PRBEN | TMREN */
     g_backlight_pct = 80u;
 
-    /* SysTick: 1 kHz */
+    /* SysTick: 1 kHz, lower priority than TMR1/TMR2 control loops */
+    REG8(0xE000ED23u) = 0x40u;
     SYST_RVR = (SYSCLK_HZ / 1000u) - 1u;
     SYST_CVR = 0u;
     SYST_CSR = 0x7u;
 
     wdt_init();
+}
+
+void board_timers_init(void) {
+    board_heater_force_off();
+
+    CRM_APB2EN |= CRM_APB2_TMR1;
+    CRM_APB1EN |= CRM_APB1_TMR2;
+
+    /* TMR1: 144 MHz / 144 = 1 MHz, PR = 999 -> 1.000 ms (1 kHz) scheduler */
+    TMR_CTRL1(TMR1_BASE) = 0u;
+    TMR_DIV(TMR1_BASE) = (TMR1_CLK_HZ / 1000000u) - 1u;
+    TMR_PR(TMR1_BASE) = 999u;
+    TMR_SWEVT(TMR1_BASE) = 1u;
+    TMR_ISTS(TMR1_BASE) = 0u;
+    TMR_IDEN(TMR1_BASE) = 1u;
+    TMR_CTRL1(TMR1_BASE) = (1u << 7) | (1u << 0);
+
+    /* TMR2: 144 MHz / 144 = 1 MHz, PR = 90 -> 91 us (~10.99 kHz) pulse/OC guard */
+    TMR_CTRL1(TMR2_BASE) = 0u;
+    TMR_DIV(TMR2_BASE) = (TMR2_CLK_HZ / 1000000u) - 1u;
+    TMR_PR(TMR2_BASE) = 90u;
+    TMR_SWEVT(TMR2_BASE) = 1u;
+    TMR_ISTS(TMR2_BASE) = 0u;
+    TMR_IDEN(TMR2_BASE) = 1u;
+    TMR_CTRL1(TMR2_BASE) = (1u << 7) | (1u << 0);
+
+    /* Highest priority to TMR2 short-circuit guard, then TMR1 scheduler */
+    irq_set_priority(TMR2_IRQn, 0x10u);
+    irq_set_priority(TMR1_OVF_IRQn, 0x20u);
+    irq_clear_pending(TMR1_OVF_IRQn);
+    irq_clear_pending(TMR2_IRQn);
+    g_timers_started = 1u;
+    irq_enable(TMR1_OVF_IRQn);
+    irq_enable(TMR2_IRQn);
+}
+
+void board_timers_pause(void) {
+    irq_disable(TMR2_IRQn);
+    irq_disable(TMR1_OVF_IRQn);
+    board_heater_force_off();
+}
+
+void board_timers_resume(void) {
+    board_heater_force_off();
+    if (g_timers_started != 0u) {
+        irq_clear_pending(TMR1_OVF_IRQn);
+        irq_clear_pending(TMR2_IRQn);
+        irq_enable(TMR1_OVF_IRQn);
+        irq_enable(TMR2_IRQn);
+    }
 }
 
 void board_set_backlight(uint8_t pct) {
@@ -229,7 +330,16 @@ void board_reboot(void) {
 #else
 
 void board_init(void) {}
-void board_heater_force_off(void) {}
+void board_heater_force_off(void) { g_heater_on = 0u; }
+void board_heater_set(uint8_t on) { g_heater_on = on ? 1u : 0u; }
+uint8_t board_heater_is_on(void) { return g_heater_on; }
+void board_set_handle_mux(uint8_t is_f245) { g_handle_mux_f245 = is_f245 ? 1u : 0u; }
+uint8_t board_get_handle_mux(void) { return g_handle_mux_f245; }
+uint8_t board_read_pb6_raw(void) { return 1u; }
+uint8_t board_read_pb5_raw(void) { return 0u; }
+void board_timers_init(void) { g_timers_started = 1u; }
+void board_timers_pause(void) { g_heater_on = 0u; (void)g_timers_started; }
+void board_timers_resume(void) { (void)g_timers_started; }
 void board_set_backlight(uint8_t pct) { g_backlight_pct = pct <= 100u ? pct : 100u; }
 uint8_t board_get_backlight(void) { return g_backlight_pct; }
 void board_buzzer_beep(uint16_t ms) { g_buzzer_off_ms = g_ticks_ms + ms; g_buzzer_active = ms ? 1u : 0u; }
