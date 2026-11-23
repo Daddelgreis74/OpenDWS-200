@@ -5,12 +5,18 @@
 
   const MAX_HISTORY_SAMPLES = 3000;
   const CHART_TEMP_MAX = 480;
+  const OPENDWS_VID = 0x2e3c;
+  const OPENDWS_PID = 0x5740;
+  const STORAGE_AUTO_CONNECT = 'opendws.autoConnect';
 
   const state = {
     port: null,
     reader: null,
     writer: null,
     connected: false,
+    connecting: false,
+    manualDisconnect: false,
+    autoConnect: localStorage.getItem(STORAGE_AUTO_CONNECT) !== '0',
     chartPaused: false,
     windowSec: 180,
     samples: [],
@@ -31,6 +37,7 @@
     badgeHandle: document.getElementById('badgeHandle'),
     badgeState: document.getElementById('badgeState'),
     badgeFault: document.getElementById('badgeFault'),
+    chkAutoConnect: document.getElementById('chkAutoConnect'),
     btnConnect: document.getElementById('btnConnect'),
 
     kpiTemp: document.getElementById('kpiTemp'),
@@ -275,39 +282,97 @@
     }
   }
 
+  function isOpenDwsWebSerialPort(port) {
+    if (!port || typeof port.getInfo !== 'function') return false;
+    const info = port.getInfo() || {};
+    return info.usbVendorId === OPENDWS_VID && info.usbProductId === OPENDWS_PID;
+  }
+
+  async function openSerialPort(port) {
+    await port.open({ baudRate: 115200 });
+    try {
+      state.port = port;
+      state.writer = port.writable.getWriter();
+      state.connected = true;
+      state.manualDisconnect = false;
+    } catch (err) {
+      state.port = null;
+      state.writer = null;
+      state.connected = false;
+      await port.close().catch(() => {});
+      throw err;
+    }
+
+    el.connDot.classList.add('online');
+    el.btnConnect.textContent = 'Trennen';
+    el.btnConnect.className = 'btn btn-danger';
+    el.mcuLabel.textContent = 'Verbunden — frage Geräteinformationen ab...';
+    setToast('Verbunden mit OpenDWS-200.');
+
+    readLoop(port.readable);
+
+    await sendCommand('INFO');
+    await sendCommand('STAT');
+    const interval = el.selectStream.value;
+    await sendCommand(interval === 'OFF' ? 'STREAM OFF' : `STREAM ${interval}`);
+  }
+
   async function connectSerial() {
     if (!('serial' in navigator)) {
       setToast('Web Serial wird in dieser Umgebung nicht unterstützt.');
       return;
     }
+    if (state.connected || state.connecting) return;
+    state.manualDisconnect = false;
+    state.connecting = true;
     try {
+      await window.opendws.setAutoSelect(false);
       const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
-      state.port = port;
-      state.writer = port.writable.getWriter();
-      state.connected = true;
-
-      el.connDot.classList.add('online');
-      el.btnConnect.textContent = 'Trennen';
-      el.btnConnect.className = 'btn btn-danger';
-      el.mcuLabel.textContent = 'Verbunden — frage Geräteinformationen ab...';
-      setToast('Verbunden mit OpenDWS-200.');
-
-      readLoop(port.readable);
-
-      await sendCommand('INFO');
-      await sendCommand('STAT');
-      const interval = el.selectStream.value;
-      await sendCommand(interval === 'OFF' ? 'STREAM OFF' : `STREAM ${interval}`);
+      await openSerialPort(port);
     } catch (err) {
       if (err && err.name !== 'NotFoundError') {
         setToast(`Verbindung fehlgeschlagen: ${err.message}`);
       }
+    } finally {
+      state.connecting = false;
     }
   }
 
-  async function disconnectSerial(message = 'Getrennt.') {
+  async function tryAutoConnect() {
+    if (!('serial' in navigator)) return;
+    if (!state.autoConnect || state.connected || state.connecting || state.manualDisconnect) return;
+    if (el.portModal && !el.portModal.classList.contains('hidden')) return;
+
+    state.connecting = true;
+    try {
+      if (typeof navigator.serial.getPorts === 'function') {
+        const granted = await navigator.serial.getPorts();
+        const known = granted.find(isOpenDwsWebSerialPort);
+        if (known) {
+          try {
+            await openSerialPort(known);
+            return;
+          } catch (_err) {
+            // Fall through to requestPort if previously granted handle failed to reopen
+          }
+        }
+      }
+      await window.opendws.setAutoSelect(true);
+      const port = await navigator.serial.requestPort();
+      await openSerialPort(port);
+    } catch (_err) {
+      // Ignored during background auto-connect (e.g. NotFoundError when unplugged)
+    } finally {
+      window.opendws.setAutoSelect(false).catch(() => {});
+      state.connecting = false;
+    }
+  }
+
+  async function disconnectSerial(message = 'Getrennt.', manual = false) {
     state.connected = false;
+    if (manual) {
+      state.manualDisconnect = true;
+    }
     try {
       if (state.reader) {
         await state.reader.cancel().catch(() => {});
@@ -508,8 +573,20 @@
   });
 
   /* Connect & Chart Controls */
+  if (el.chkAutoConnect) {
+    el.chkAutoConnect.checked = state.autoConnect;
+    el.chkAutoConnect.addEventListener('change', () => {
+      state.autoConnect = el.chkAutoConnect.checked;
+      localStorage.setItem(STORAGE_AUTO_CONNECT, state.autoConnect ? '1' : '0');
+      if (state.autoConnect) {
+        state.manualDisconnect = false;
+        tryAutoConnect();
+      }
+    });
+  }
+
   el.btnConnect.addEventListener('click', () => {
-    if (state.connected) disconnectSerial('Verbindung getrennt.');
+    if (state.connected) disconnectSerial('Verbindung getrennt.', true);
     else connectSerial();
   });
 
@@ -741,6 +818,23 @@
   setInterval(() => {
     el.btnLogExport.disabled = !(state.logRows.length > 0);
   }, 400);
+
+  if ('serial' in navigator) {
+    navigator.serial.addEventListener('connect', (event) => {
+      if (event && event.target && !isOpenDwsWebSerialPort(event.target)) {
+        return;
+      }
+      state.manualDisconnect = false;
+      setTimeout(tryAutoConnect, 250);
+    });
+    navigator.serial.addEventListener('disconnect', (event) => {
+      if (state.connected && event && event.target === state.port) {
+        disconnectSerial('USB-Verbindung getrennt.');
+      }
+    });
+  }
+  setInterval(tryAutoConnect, 2500);
+  setTimeout(tryAutoConnect, 300);
 
   drawChart();
 })();

@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('opendws', {
     ipcRenderer.on('serial:port-list', listener);
     return () => ipcRenderer.removeListener('serial:port-list', listener);
   },
+  setAutoSelect(enabled) {
+    return ipcRenderer.invoke('serial:set-auto-select', !!enabled);
+  },
   selectSerialPort(portId) {
     return ipcRenderer.invoke('serial:select-port', portId);
   },

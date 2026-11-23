@@ -10,6 +10,7 @@ const MAX_FW_BYTES = 245760;
 
 let mainWindow = null;
 let pendingSerialCallback = null;
+let autoSelectOpenDws = false;
 
 function clearPendingSerialCallback() {
   if (typeof pendingSerialCallback === 'function') {
@@ -141,7 +142,8 @@ app.whenReady().then(() => {
   session.defaultSession.on('select-serial-port', (event, portList, _webContents, callback) => {
     event.preventDefault();
     clearPendingSerialCallback();
-    pendingSerialCallback = callback;
+    const autoSelect = autoSelectOpenDws;
+    autoSelectOpenDws = false;
 
     const mapped = (portList || [])
       .map((p) => ({
@@ -158,11 +160,24 @@ app.whenReady().then(() => {
         return String(a.portName).localeCompare(String(b.portName));
       });
 
+    if (autoSelect) {
+      const match = mapped.find((p) => p.isOpenDws);
+      callback(match ? String(match.portId) : '');
+      return;
+    }
+
+    pendingSerialCallback = callback;
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('serial:port-list', mapped);
     } else {
       clearPendingSerialCallback();
     }
+  });
+
+  ipcMain.handle('serial:set-auto-select', (_event, enabled) => {
+    autoSelectOpenDws = !!enabled;
+    return autoSelectOpenDws;
   });
 
   ipcMain.handle('serial:select-port', (_event, portId) => {
