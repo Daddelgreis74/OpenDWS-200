@@ -28,8 +28,8 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 
 | Pin | Funktion | Modus / Konfiguration | Beschreibung |
 | :--- | :--- | :--- | :--- |
-| `PA2` | **Heizung (Safety Lockout)** | Output Push-Pull `LOW` | **In Phase 1 hart auf `LOW` gesperrt** |
-| `PB1` | Board-Enable / Latch | Output Push-Pull `HIGH` | Standard-Enable aus Stock-Init |
+| `PA2` | **Heizung (Safety Lockout)** | Output Push-Pull `LOW` | **In Phase 1 hart auf `LOW` gesperrt**; Stock: DC-Puls `91 µs`/`10 ms` (siehe [phase2-control-analysis.md](phase2-control-analysis.md)) |
+| `PB1` | Soft-Power-Latch | Output Push-Pull `HIGH` | Hält Versorgung aktiv; wird über `PB0`-Flankensequenz auf `LOW` abgeschaltet |
 | `PB12` | Display `CS` | Output Push-Pull (`HIGH` idle) | ST7789V Chip Select |
 | `PB13` | Display `SCK` | AF Push-Pull 50 MHz | `SPI2_SCK` (Mode 3, 18 MHz) |
 | `PB14` | Display `MISO` | Input Floating | `SPI2_MISO` |
@@ -38,18 +38,20 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PC7` | Display `RST` | Output Push-Pull | Active-LOW Hardware-Reset |
 | `PC8` | Piezo-Buzzer | AF Push-Pull (`TMR3_CH3`) | ~2,7 kHz PWM (`IOMUX_REMAP4` `[11:8]=0x3`) |
 | `PC9` | Display Backlight | AF Push-Pull (`TMR3_CH4`) | ~2,7 kHz PWM (`IOMUX_REMAP4` `[11:8]=0x3`), Active-HIGH |
-| `PC0` | `ADC1_IN10` | Analog (239,5 Cycl.) | Lötspitzen-Thermoelement |
-| `PC1` | `ADC1_IN11` | Analog (55,5 Cycl.) | Hall-Stromsensor (`66 mV/A`, Nullpunkt `1,65 V`) |
-| `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | Hilfs-/Kaltstellen-Referenz |
+| `PC0` | `ADC1_IN10` | Analog (239,5 Cycl.) | Lötspitzen-Thermoelement (Blanking `1,0 ms` nach `PA2 = LOW`) |
+| `PC1` | `ADC1_IN11` | Analog (55,5 Cycl.) | Hall-Stromsensor (`66 mV/A`, Nullpunkt `1,65 V`, Kurzschluss-Check nach `364 µs`) |
+| `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | 24-V-Rail-Monitor (`V_rail = adc_V * 16,0`; `1,434 V × 16 = 22,94 V`) |
 | `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 1: Buzzer-Testton |
 | `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 1: USB-Stream an/aus |
 | `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Phase 1: LED-Lauflicht an/aus |
 | `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `-10%` (`SWJTAG_CONF=0b010`!) |
 | `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `+10%` (`SWJTAG_CONF=0b010`!) |
 | `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (IRQ 23) |
-| `PB6` | Griff-Erkennung | Input Pull-Up | Unterscheidet `F245` / `F210` |
-| `PB0` | Diag-Eingang | Input Pull-Up | Live-Monitoring |
+| `PB6` | Griff-Erkennung | Input Pull-Up | Unterscheidet die beiden Handgrifftypen (`handle_type 1` bei `HIGH` vs. `0` bei `LOW`) |
+| `PC13, PC14, PC15` | Griff-Mux / Gain-Steuerung | Output Push-Pull | Analogbereich-Umschaltung (`PB6=1`: `PC14=1, PC13/15=0`; `PB6=0`: `PC14=0, PC13/15=1`) |
+| `PB0` | Soft-Power-Taster / Diag | Input Pull-Up | Flankensequenz steuert Power-Latch `PB1` |
 | `PB2` | Diag-Eingang | Input Pull-Down | Live-Monitoring |
+| `PB10, PB11` | Bit-Bang `I2C` | Output / Open-Drain | Nebenbus für Slave-Adresse `0x78` (optionales Power-/Display-IC) |
 | `PF4, PF5` | Front-LEDs 0..1 | Output Push-Pull | Status-LEDs |
 | `PA4..PA7` | Front-LEDs 2..5 | Output Push-Pull | Status-LEDs |
 | `PC4, PC5` | Front-LEDs 6..7 | Output Push-Pull | Status-LEDs |
@@ -71,6 +73,6 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 - **USB-CDC Enumeration:** `USB\VID_2E3C&PID_5740\DWS200-P1` (`COM7`, `144 MHz` PLL / `48 MHz` USB-Takt verifiziert).
 - **`PC0` (`TIP`):** `11..25 raw` (`9..20 mV`) bei Raumtemperatur.
 - **`PC1` (`CUR`):** `2037..2038 raw` (`1642 mV`, ca. `-8 mV` Ruhe-Offset zum theoretischen `1650 mV`-Nullpunkt).
-- **`PA3` (`AUX`):** Initial `180 raw` (`145 mV`), sprang nach Griff-/Stromänderung auf `1777..1780 raw` (`1432..1434 mV`; genaue Funktion folgt in Phase-2-RE).
+- **`PA3` (`AUX` / 24-V-Rail):** Initial `180 raw` (`145 mV × 16 = 2,32 V` reiner USB-Betrieb), nach Netzeinschalten `1777..1780 raw` (`1432..1434 mV × 16 = 22,94 V`); Details zu PID, Kennlinien & Timing siehe [phase2-control-analysis.md](phase2-control-analysis.md).
 - **`PB5` (`EXINT5`):** Als mechanischer Ständer-/Schlafkontakt bestätigt (`pb5_cnt = 115` Prellflanken beim Bewegen im Ständer, im Ruhezustand konstant).
 - **Sicherheitsverriegelung:** `PA2` bleibt permanent `LOW` (`heater=0`), `HEAT 1` und `TEMP 350` liefern `ERR HEATER_LOCKED_IN_SAFE_MODE`.
