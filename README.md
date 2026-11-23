@@ -6,7 +6,7 @@
 Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-W-Präzisionslötstation (MCU: Artery `AT32F415RCT7`, ARM Cortex-M4 ohne FPU, `144 MHz`).
 
 > [!IMPORTANT]
-> **Phase 2 — Geschlossene PID-Regelung, Auto-Ständer & Soft-Power (`v0.2.2-phase2`)**
+> **Phase 2 — Geschlossene PID-Regelung, Auto-Ständer & Soft-Power (`v0.2.3-phase2`)**
 > Die Station startet sicher im **`STANDBY` (`PA2 = LOW`)**. Beim **Entnehmen des Kolbens aus dem Ständer (`PB5`)** wacht sie bei anliegender `24-V`-Schiene automatisch auf und heizt los; beim **Zurücklegen** geht sie selbsttätig in den Sleep-Modus (`100 °C` bzw. optional `0 W`). Der **Power-Button (`PB0`/`PB1`)** speichert geänderte Settings und schaltet die Station sauber ab.
 
 ---

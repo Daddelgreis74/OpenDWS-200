@@ -188,6 +188,47 @@ int main(void) {
     assert((c.fault_mask & FAULT_OVERLOAD) != 0u);
     assert(c.armed == 0u);
 
+    /* 11. Target-reached one-shot ready beep notification (+/- 3.0 C band) */
+    heater_ready_notify_t rn;
+    heater_ready_notify_init(&rn);
+    heater_status_t st;
+    st.state = HEATER_STANDBY;
+    st.active_target_c = 300u;
+    st.tip_deci_c = 3000;
+    assert(heater_ready_notify_step(&rn, &st) == 0u); /* No beep in STANDBY */
+
+    st.state = HEATER_HEATING;
+    st.tip_deci_c = 2969; /* 296.9 C: 3.1 C below target */
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+
+    st.tip_deci_c = 2970; /* 297.0 C: within +/- 3.0 C READY band */
+    assert(heater_ready_notify_step(&rn, &st) == 1u);
+
+    st.tip_deci_c = 3000; /* Already announced for 300 C */
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+    st.tip_deci_c = 2950; /* Transient drop while soldering does not re-trigger */
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+    st.tip_deci_c = 3000;
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+
+    /* Changing target re-arms notification until new target is reached */
+    st.active_target_c = 350u;
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+    st.tip_deci_c = 3480;
+    assert(heater_ready_notify_step(&rn, &st) == 1u);
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+
+    /* Entering SLEEP resets notification so next wake-up beeps when ready */
+    st.state = HEATER_SLEEP;
+    st.active_target_c = 100u;
+    st.tip_deci_c = 1000;
+    assert(heater_ready_notify_step(&rn, &st) == 0u);
+
+    st.state = HEATER_HEATING;
+    st.active_target_c = 350u;
+    st.tip_deci_c = 3475;
+    assert(heater_ready_notify_step(&rn, &st) == 1u);
+
     printf("test_heater: PASS\n");
     return 0;
 }

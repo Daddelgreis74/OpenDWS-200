@@ -392,6 +392,8 @@ int main(void) {
 
     soft_power_t soft_pwr;
     soft_power_init(&soft_pwr);
+    heater_ready_notify_t ready_notify;
+    heater_ready_notify_init(&ready_notify);
     heater_state_t prev_heater_state = app.hst.state;
 
     uint32_t last_sample_ms = ui_st.uptime_ms;
@@ -532,6 +534,9 @@ int main(void) {
             app_beep(&app, 35u);
         } else if (prev_heater_state == HEATER_HEATING && app.hst.state == HEATER_SLEEP) {
             app_beep(&app, 20u);
+        }
+        if (heater_ready_notify_step(&ready_notify, &app.hst) != 0u) {
+            app_beep(&app, 100u);
         }
         prev_heater_state = app.hst.state;
 

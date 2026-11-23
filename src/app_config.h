@@ -2,7 +2,7 @@
 
 /* OpenDWS-200 Firmware Configuration (Phase 2 - Closed-Loop PID & Safety) */
 #ifndef OPENDWS_VERSION_STR
-#define OPENDWS_VERSION_STR "v0.2.2-phase2"
+#define OPENDWS_VERSION_STR "v0.2.3-phase2"
 #endif
 
 /* Phase 2: Heater enabled ONLY on explicit user command, ALWAYS boots in STANDBY (PA2 LOW). */

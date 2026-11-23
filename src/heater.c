@@ -554,6 +554,37 @@ void heater_ctrl_get_status(const heater_ctrl_t *c, uint8_t pin_on, heater_statu
     out->aux_raw = c->aux_raw;
 }
 
+void heater_ready_notify_init(heater_ready_notify_t *n) {
+    if (n == NULL) {
+        return;
+    }
+    n->announced = 0u;
+    n->last_target_c = 0u;
+}
+
+uint8_t heater_ready_notify_step(heater_ready_notify_t *n, const heater_status_t *st) {
+    if (n == NULL || st == NULL) {
+        return 0u;
+    }
+    if (st->state != HEATER_HEATING || st->active_target_c == 0u) {
+        n->announced = 0u;
+        n->last_target_c = st->active_target_c;
+        return 0u;
+    }
+    if (st->active_target_c != n->last_target_c) {
+        n->announced = 0u;
+        n->last_target_c = st->active_target_c;
+    }
+    if (n->announced == 0u) {
+        int32_t diff = (int32_t)st->active_target_c * 10 - st->tip_deci_c;
+        if (diff >= -30 && diff <= 30) {
+            n->announced = 1u;
+            return 1u;
+        }
+    }
+    return 0u;
+}
+
 const char *heater_state_name(heater_state_t st) {
     switch (st) {
     case HEATER_STANDBY: return "STANDBY";

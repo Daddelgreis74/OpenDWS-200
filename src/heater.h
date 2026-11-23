@@ -130,6 +130,15 @@ heater_cmd_err_t heater_ctrl_set_cal(heater_ctrl_t *c, int16_t offset_c);
 heater_cmd_err_t heater_ctrl_clear_fault(heater_ctrl_t *c);
 void heater_ctrl_get_status(const heater_ctrl_t *c, uint8_t pin_on, heater_status_t *out);
 
+/* Target-temperature-reached one-shot notification tracker */
+typedef struct {
+    uint8_t  announced;
+    uint16_t last_target_c;
+} heater_ready_notify_t;
+
+void heater_ready_notify_init(heater_ready_notify_t *n);
+uint8_t heater_ready_notify_step(heater_ready_notify_t *n, const heater_status_t *st);
+
 /* String formatting helpers */
 const char *heater_state_name(heater_state_t st);
 const char *heater_fault_name(uint16_t fault_mask);
