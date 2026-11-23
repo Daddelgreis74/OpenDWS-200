@@ -23,6 +23,7 @@
 #define GINT_RXFLVL    (1u << 4)
 #define GINT_IEPINT    (1u << 18)
 #define GINT_OEPINT    (1u << 19)
+#define GINT_WKUP      (1u << 31)
 
 /* OTG_DIEPCTL / DOEPCTL bits */
 #define DEPCTL_EPENA   (1u << 31)
@@ -49,6 +50,9 @@ static volatile uint8_t g_configured = 0u;
 static volatile uint8_t g_dtr = 0u;
 static volatile uint8_t g_ep1_tx_busy = 0u;
 static volatile uint8_t g_ep1_need_zlp = 0u;
+static volatile uint16_t g_dbg_irq_cnt = 0u;
+static volatile uint16_t g_dbg_rst_cnt = 0u;
+static volatile uint16_t g_dbg_setup_cnt = 0u;
 
 static ep0_state_t g_ep0_state = EP0_IDLE;
 static uint8_t g_setup_pkt[8];
@@ -190,7 +194,6 @@ static void ep0_start_in(const uint8_t *data, uint16_t len, uint16_t req_len) {
 
 static void ep0_stall(void) {
     OTG_DIEPCTL(0) |= DEPCTL_STALL;
-    OTG_DOEPCTL(0) |= DEPCTL_STALL;
     g_ep0_state = EP0_IDLE;
     ep0_arm_setup();
 }
@@ -227,6 +230,7 @@ static void usb_flush_rx_fifo(void) {
 }
 
 static void handle_setup_packet(void) {
+    g_dbg_setup_cnt++;
     uint8_t bmRequest = g_setup_pkt[0];
     uint8_t bRequest  = g_setup_pkt[1];
     uint16_t wValue   = (uint16_t)g_setup_pkt[2] | ((uint16_t)g_setup_pkt[3] << 8);
@@ -343,16 +347,19 @@ static void ep1_start_tx_locked(void) {
 }
 
 void OTGFS1_IRQHandler(void) {
+    g_dbg_irq_cnt++;
     uint32_t gint = OTG_GINTSTS & OTG_GINTMSK;
 
     if (gint & GINT_USBRST) {
         OTG_GINTSTS = GINT_USBRST;
+        g_dbg_rst_cnt++;
         g_configured = 0u;
         g_dtr = 0u;
         g_ep1_tx_busy = 0u;
         g_ep1_need_zlp = 0u;
         g_ep0_state = EP0_IDLE;
 
+        OTG_DCTL &= ~(1u << 0); /* Clear RWKUPSIG */
         OTG_DCFG &= ~(0x7Fu << 4);
         usb_flush_tx_fifo(0x10u);
         usb_flush_rx_fifo();
@@ -371,8 +378,9 @@ void OTGFS1_IRQHandler(void) {
 
     if (gint & GINT_ENUMDONE) {
         OTG_GINTSTS = GINT_ENUMDONE;
-        OTG_DIEPCTL(0) &= ~0x3u; /* EP0 MPS = 64 bytes */
-        OTG_GUSBCFG = (OTG_GUSBCFG & ~(0xFu << 10)) | (6u << 10); /* TRDT = 6 for 144 MHz AHB */
+        OTG_DIEPCTL(0) &= ~0x7FFu; /* EP0 MPS = 64 bytes */
+        OTG_DCTL &= ~(1u << 8);    /* Clear CGINAK */
+        OTG_GUSBCFG = (OTG_GUSBCFG & ~(0xFu << 10)) | (5u << 10); /* TRDT = 5 for 144 MHz AHB */
         ep0_arm_setup();
     }
 
@@ -415,7 +423,7 @@ void OTGFS1_IRQHandler(void) {
                         }
                     } else {
                         g_ep0_state = EP0_STATUS_OUT;
-                        OTG_DOEPTSIZ(0) = (1u << 19) | 0u;
+                        OTG_DOEPTSIZ(0) = (3u << 29) | (1u << 19) | 64u;
                         OTG_DOEPCTL(0) = DEPCTL_EPENA | DEPCTL_CNAK | DEPCTL_USBAEP;
                     }
                 } else if (g_ep0_state == EP0_STATUS_IN) {
@@ -469,6 +477,12 @@ void OTGFS1_IRQHandler(void) {
         g_dtr = 0u;
         g_ep1_tx_busy = 0u;
     }
+
+    if (gint & GINT_WKUP) {
+        OTG_DCTL &= ~(1u << 0);
+        OTG_PCGCCTL = 0u;
+        OTG_GINTSTS = GINT_WKUP;
+    }
 }
 
 void usb_cdc_init(void) {
@@ -476,21 +490,31 @@ void usb_cdc_init(void) {
     g_dtr = 0u;
     g_ep1_tx_busy = 0u;
     g_ep1_need_zlp = 0u;
+    g_ep0_state = EP0_IDLE;
     g_rx_head = g_rx_tail = 0u;
     g_tx_head = g_tx_tail = 0u;
+    g_dbg_irq_cnt = 0u;
+    g_dbg_rst_cnt = 0u;
+    g_dbg_setup_cnt = 0u;
+
+    /* Leave PA11 (DM) and PA12 (DP) in reset default floating input for OTG PHY */
+    gpio_config_pin(GPIOA_BASE, 11u, GPIO_MODE_IN_FLOAT, 0u);
+    gpio_config_pin(GPIOA_BASE, 12u, GPIO_MODE_IN_FLOAT, 0u);
 
     CRM_AHBEN |= CRM_AHB_OTGFS1;
 
-    /* Mask global interrupts during core init */
-    OTG_GAHBCFG = 0u;
-    OTG_GINTMSK = 0u;
+    /* Ignore VBUS sensing before disconnecting / initializing core (matches IPS3608) */
+    OTG_GCCFG |= (1u << 21);
 
     /* Soft disconnect to force fresh host re-enumeration after bootloader */
     OTG_DCTL |= (1u << 1);
     board_delay_ms(20u);
 
-    /* Select embedded FS PHY, wait for AHB idle, then perform Core soft reset */
-    OTG_GUSBCFG |= (1u << 6);
+    /* Mask global interrupts during core init */
+    OTG_GAHBCFG = 0u;
+    OTG_GINTMSK = 0u;
+
+    /* Wait for AHB idle, then perform Core soft reset */
     for (uint32_t t = 0u; t < 100000u && (OTG_GRSTCTL & (1u << 31)) == 0u; ++t) {
     }
     OTG_GRSTCTL |= (1u << 0);
@@ -498,34 +522,61 @@ void usb_cdc_init(void) {
     }
     board_delay_ms(5u);
 
-    /* Apply Force Device Mode + FS PHY + TRDT AFTER core reset (reset clears GUSBCFG) */
-    OTG_GUSBCFG = (OTG_GUSBCFG & ~((1u << 29) | (0xFu << 10))) | (1u << 6) | (1u << 30) | (6u << 10);
+    /* Power on embedded FS PHY + A/B valid sense + ignore PA9 VBUS BEFORE FDEVMODE */
+    OTG_GCCFG = (1u << 16) | (1u << 18) | (1u << 19) | (1u << 21); /* 0x002D0000 */
+    board_delay_ms(5u);
+
+    /* Force Device Mode + TRDT = 5 AFTER PHY is powered on */
+    OTG_GUSBCFG = (OTG_GUSBCFG & ~((1u << 29) | (0xFu << 10))) | (1u << 30) | (5u << 10);
     board_delay_ms(25u);
 
-    /* Restart PHY clock and power on FS transceiver + ignore PA9 VBUS sensing */
+    /* Restart PHY clock and set Full-Speed internal PHY + clear PFIVL */
     OTG_PCGCCTL = 0u;
-    OTG_GCCFG = (1u << 16) | (1u << 21); /* PWRDOWN=1 (PHY active), VBUSIG=1 */
+    OTG_DCFG = (OTG_DCFG & ~((3u << 11) | 0x3u)) | 0x3u;
 
-    /* Device Speed = Full-Speed internal PHY (DSPD = 3) */
-    OTG_DCFG = (OTG_DCFG & ~0x3u) | 0x3u;
+    usb_flush_tx_fifo(0x10u);
+    usb_flush_rx_fifo();
 
-    /* FIFO layout (192 of 320 words total, matches IPS3608 AT32F415 layout) */
+    OTG_DAINTMSK = 0u;
+    OTG_DIEPMSK = 0u;
+    OTG_DOEPMSK = 0u;
+
+    /* Zero TX FIFO registers, then configure AT32F415 FIFO layout (matches IPS3608) */
+    for (uint32_t n = 1u; n <= 4u; ++n) {
+        OTG_DIEPTXF(n) = 0u;
+    }
     OTG_GRXFSIZ = 0x80u;
     OTG_DIEPTXF0 = (0x18u << 16) | 0x80u;
     OTG_DIEPTXF(1) = (0x14u << 16) | 0x98u;
     OTG_DIEPTXF(2) = (0x14u << 16) | 0xACu;
-    usb_flush_tx_fifo(0x10u);
-    usb_flush_rx_fifo();
+    OTG_DIEPTXF(3) = (0x14u << 16) | 0xC0u;
 
-    OTG_DIEPMSK = 0u;
-    OTG_DOEPMSK = 0u;
-    OTG_DAINTMSK = 0u;
+    /* Explicitly reset all 4 IN and 4 OUT endpoints before enabling interrupts */
+    for (uint32_t ep = 0u; ep < 4u; ++ep) {
+        if ((OTG_DIEPCTL(ep) & DEPCTL_EPENA) != 0u) {
+            OTG_DIEPCTL(ep) = DEPCTL_EPDIS | DEPCTL_SNAK;
+        } else {
+            OTG_DIEPCTL(ep) = 0u;
+        }
+        OTG_DIEPTSIZ(ep) = 0u;
+        OTG_DIEPINT(ep) = 0xFFu;
+
+        if ((OTG_DOEPCTL(ep) & DEPCTL_EPENA) != 0u) {
+            OTG_DOEPCTL(ep) = DEPCTL_EPDIS | DEPCTL_SNAK;
+        } else {
+            OTG_DOEPCTL(ep) = 0u;
+        }
+        OTG_DOEPTSIZ(ep) = 0u;
+        OTG_DOEPINT(ep) = 0xFFu;
+    }
+
     OTG_GINTSTS = 0xFFFFFFFFu;
-    OTG_GINTMSK = GINT_USBRST | GINT_ENUMDONE | GINT_RXFLVL | GINT_IEPINT | GINT_OEPINT | GINT_USBSUSP;
-    OTG_GAHBCFG = (1u << 0); /* GINTMSK */
+    OTG_GINTMSK = GINT_USBRST | GINT_ENUMDONE | GINT_RXFLVL |
+                  GINT_IEPINT | GINT_OEPINT | GINT_USBSUSP | GINT_WKUP;
 
-    /* Soft connect (clear SDISCON) */
+    /* Soft connect (clear SDISCON) and enable global OTG interrupt */
     OTG_DCTL &= ~(1u << 1);
+    OTG_GAHBCFG = (1u << 0);
     irq_enable(OTGFS1_IRQn);
 }
 
@@ -542,6 +593,14 @@ uint8_t usb_cdc_is_connected(void) {
 
 uint8_t usb_cdc_dtr(void) {
     return g_dtr;
+}
+
+void usb_cdc_get_debug(usb_cdc_debug_t *out) {
+    if (out == NULL) return;
+    out->irq_cnt = g_dbg_irq_cnt;
+    out->rst_cnt = g_dbg_rst_cnt;
+    out->setup_cnt = g_dbg_setup_cnt;
+    out->gccfg_hi = (uint8_t)((OTG_GCCFG >> 16) & 0xFFu);
 }
 
 size_t usb_cdc_write(const uint8_t *data, size_t len) {
@@ -616,6 +675,14 @@ void usb_cdc_init(void) {}
 void usb_cdc_poll(void) {}
 uint8_t usb_cdc_is_connected(void) { return 0u; }
 uint8_t usb_cdc_dtr(void) { return 0u; }
+void usb_cdc_get_debug(usb_cdc_debug_t *out) {
+    if (out != NULL) {
+        out->irq_cnt = 0u;
+        out->rst_cnt = 0u;
+        out->setup_cnt = 0u;
+        out->gccfg_hi = 0u;
+    }
+}
 size_t usb_cdc_write(const uint8_t *data, size_t len) { (void)data; (void)len; return 0u; }
 size_t usb_cdc_read_line(char *buf, size_t max_len) { (void)buf; (void)max_len; return 0u; }
 

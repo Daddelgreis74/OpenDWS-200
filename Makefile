@@ -1,5 +1,5 @@
 PROJECT := opendws200
-VERSION ?= v0.1.0-bringup
+VERSION ?= v0.1.1-bringup
 BUILD := build
 DIST := dist
 OUT_BIN := $(DIST)/APP_DWS_200_OpenDWS-$(VERSION).bin

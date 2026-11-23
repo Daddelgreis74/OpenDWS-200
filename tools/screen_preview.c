@@ -46,7 +46,8 @@ int main(void) {
         .stream_interval_ms = 100u,
         .backlight_pct = 80u,
         .led_mask = 0x00u,
-        .uptime_ms = 42000u
+        .uptime_ms = 42000u,
+        .usb_gccfg_hi = 0x2Du
     };
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);

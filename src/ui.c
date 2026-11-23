@@ -174,18 +174,34 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     (void)fmt_append_str(line, p, sizeof(line), num);
     gfx_draw_text(14u, 175u, line, COL_RED, COL_CARD, 1u);
 
-    /* Stream & uptime line */
+    /* Stream / USB debug & uptime line */
     uint32_t total_s = st->uptime_ms / 1000u;
     uint32_t hh = (total_s / 3600u) % 100u;
     uint32_t mm = (total_s / 60u) % 60u;
     uint32_t ss = total_s % 60u;
     p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "STREAM:");
-    p = fmt_append_str(line, p, sizeof(line), st->stream_enabled ? "ON " : "OFF");
-    p = fmt_append_str(line, p, sizeof(line), " (");
-    fmt_uint_pad(num, sizeof(num), st->stream_interval_ms, 4u, ' ');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), "ms)  UP:");
+    if (st->usb_connected != 0u) {
+        p = fmt_append_str(line, p, sizeof(line), "STREAM:");
+        p = fmt_append_str(line, p, sizeof(line), st->stream_enabled ? "ON " : "OFF");
+        p = fmt_append_str(line, p, sizeof(line), " (");
+        fmt_uint_pad(num, sizeof(num), st->stream_interval_ms, 4u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "ms)  UP:");
+    } else {
+        p = fmt_append_str(line, p, sizeof(line), "USB I:");
+        fmt_uint_pad(num, sizeof(num), st->usb_irq_cnt % 1000u, 3u, '0');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), " R:");
+        fmt_uint_pad(num, sizeof(num), st->usb_rst_cnt % 100u, 2u, '0');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), " S:");
+        fmt_uint_pad(num, sizeof(num), st->usb_setup_cnt % 100u, 2u, '0');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), " G:");
+        fmt_hex8(num, sizeof(num), st->usb_gccfg_hi);
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "  UP:");
+    }
     fmt_uint_pad(num, sizeof(num), hh, 2u, '0');
     p = fmt_append_str(line, p, sizeof(line), num);
     p = fmt_append_str(line, p, sizeof(line), ":");
@@ -193,6 +209,9 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     p = fmt_append_str(line, p, sizeof(line), num);
     p = fmt_append_str(line, p, sizeof(line), ":");
     fmt_uint_pad(num, sizeof(num), ss, 2u, '0');
-    (void)fmt_append_str(line, p, sizeof(line), num);
+    p = fmt_append_str(line, p, sizeof(line), num);
+    if (st->usb_connected != 0u) {
+        (void)fmt_append_str(line, p, sizeof(line), "     ");
+    }
     gfx_draw_text(14u, 191u, line, COL_MUTED, COL_CARD, 1u);
 }

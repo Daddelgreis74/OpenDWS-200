@@ -12,6 +12,10 @@ typedef struct {
     uint8_t backlight_pct;
     uint8_t led_mask;
     uint32_t uptime_ms;
+    uint16_t usb_irq_cnt;
+    uint16_t usb_rst_cnt;
+    uint16_t usb_setup_cnt;
+    uint8_t  usb_gccfg_hi;
 } ui_status_t;
 
 void ui_draw_static(void);

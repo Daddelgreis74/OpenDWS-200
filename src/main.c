@@ -81,13 +81,20 @@ int main(void) {
 
     ui_draw_static();
 
+    usb_cdc_debug_t udbg;
+    usb_cdc_get_debug(&udbg);
+
     ui_status_t ui_st = {
         .usb_connected = usb_cdc_is_connected(),
         .stream_enabled = proto.stream_enabled,
         .stream_interval_ms = proto.stream_interval_ms,
         .backlight_pct = board_get_backlight(),
         .led_mask = board_get_leds(),
-        .uptime_ms = board_ticks_ms()
+        .uptime_ms = board_ticks_ms(),
+        .usb_irq_cnt = udbg.irq_cnt,
+        .usb_rst_cnt = udbg.rst_cnt,
+        .usb_setup_cnt = udbg.setup_cnt,
+        .usb_gccfg_hi = udbg.gccfg_hi
     };
     ui_draw_dynamic(&snap, &inp, &ui_st);
 
@@ -164,12 +171,17 @@ int main(void) {
 
         if ((uint32_t)(now - last_ui_ms) >= UI_REFRESH_MS) {
             last_ui_ms = now;
+            usb_cdc_get_debug(&udbg);
             ui_st.usb_connected = usb_cdc_is_connected();
             ui_st.stream_enabled = proto.stream_enabled;
             ui_st.stream_interval_ms = proto.stream_interval_ms;
             ui_st.backlight_pct = board_get_backlight();
             ui_st.led_mask = board_get_leds();
             ui_st.uptime_ms = now;
+            ui_st.usb_irq_cnt = udbg.irq_cnt;
+            ui_st.usb_rst_cnt = udbg.rst_cnt;
+            ui_st.usb_setup_cnt = udbg.setup_cnt;
+            ui_st.usb_gccfg_hi = udbg.gccfg_hi;
             ui_draw_dynamic(&snap, &inp, &ui_st);
         }
     }

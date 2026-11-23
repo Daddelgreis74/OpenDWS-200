@@ -2,7 +2,7 @@
 
 /* OpenDWS-200 Firmware Configuration (Phase 1 - Safe Bring-Up) */
 #ifndef OPENDWS_VERSION_STR
-#define OPENDWS_VERSION_STR "v0.1.0-bringup"
+#define OPENDWS_VERSION_STR "v0.1.1-bringup"
 #endif
 
 /* Phase 1 Safe Bring-Up: Heater output (PA2) is permanently locked OFF. */
