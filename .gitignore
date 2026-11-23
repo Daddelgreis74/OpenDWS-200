@@ -1,0 +1,12 @@
+build/
+dist/
+__pycache__/
+*.pyc
+*.o
+*.elf
+*.bin
+*.map
+*.ppm
+*.d
+.DS_Store
+Thumbs.db
