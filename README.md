@@ -32,7 +32,7 @@ Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-
 ## 🔌 Flashen & Zurückflashen (ohne Programmer)
 
 1. Lötstation am rückseitigen Netzschalter ausschalten.
-2. **MODE / Drehknopf-Taste** (`PD2`) gedrückt halten und per **USB-C-Datenkabel** mit dem PC verbinden.
+2. **MODE-Taste** (`PD2`) gedrückt halten und per **USB-C-Datenkabel** mit dem PC verbinden.
 3. Im Windows-Explorer erscheint das Laufwerk `BOOTLOADER`.
 4. `APP_DWS_200_OpenDWS-*.bin` (aus den [GitHub Releases](../../releases)) auf `BOOTLOADER` kopieren und neu starten.
 5. Rückkehr zur Stock-Firmware jederzeit durch Aufspielen von `APP_DWS_200_V1.5_250922.bin` im `BOOTLOADER`-Modus.
