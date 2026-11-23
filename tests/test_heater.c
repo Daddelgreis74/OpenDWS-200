@@ -29,39 +29,52 @@ static uint16_t f245_dc_to_adc(int32_t dc) {
 int main(void) {
     heater_ctrl_t c;
 
-    /* 1. Boot-safe Standby & F245 initialization (100 C default sleep) */
+    /* 1. Boot-safe Standby (iron IN stand PB5=0) & F245 initialization */
     g_mux_calls = 0u;
-    heater_ctrl_init(&c, 1u, 300u, 100u, 1u, 0, 0, mock_mux);
+    heater_ctrl_init(&c, 1u, 0u, 300u, 100u, 1u, 0, 0, mock_mux);
     assert(c.armed == 0u);
+    assert(c.in_stand == 1u);
     assert(c.state == HEATER_STANDBY);
     assert(c.is_f245 == 1u);
     assert(g_mux_calls == 1u && g_mux_last == 1u);
 
-    /* USB-only rail (2.32 V -> 180 raw) blocks heating */
+    /* Boot with iron ALREADY out of stand (PB5=1) must NEVER auto-heat */
+    heater_ctrl_t out_boot;
+    heater_ctrl_init(&out_boot, 1u, 1u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_update_rail(&out_boot, 1780u);
+    for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS + 30u; ++i) {
+        assert(heater_ctrl_step_10ms(&out_boot, 200u, 1u, 1u) == 0u);
+    }
+    assert(out_boot.armed == 0u && out_boot.state == HEATER_STANDBY);
+
+    /* USB-only rail (2.32 V -> 180 raw) blocks manual & auto-lift heating */
     heater_ctrl_update_rail(&c, 180u);
     assert((c.fault_mask & FAULT_UNDERVOLT) != 0u);
     assert(heater_ctrl_set_enable(&c, 1u) == HEATER_CMD_ERR_NO_24V);
-    assert(heater_ctrl_step_10ms(&c, 100u, 1u, 1u) == 0u);
+    assert(heater_ctrl_step_10ms(&c, 100u, 1u, 0u) == 0u);
 
     /* Overvoltage rail (> 30 V -> 2500 raw ~32.2 V) blocks heating */
     heater_ctrl_update_rail(&c, 2500u);
     assert((c.fault_mask & FAULT_OVERVOLT) != 0u);
     assert(heater_ctrl_set_enable(&c, 1u) == HEATER_CMD_ERR_OVERVOLT);
 
-    /* Normal 22.9 V rail (1780 raw) clears rail faults, stays DISARMED in standby */
+    /* Normal 22.9 V rail (1780 raw) clears rail faults, stays DISARMED in stand */
     heater_ctrl_update_rail(&c, 1780u);
     assert((c.fault_mask & (FAULT_UNDERVOLT | FAULT_OVERVOLT)) == 0u);
     assert(c.armed == 0u);
     for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS; ++i) {
-        assert(heater_ctrl_step_10ms(&c, 200u, 1u, 1u) == 0u);
+        assert(heater_ctrl_step_10ms(&c, 200u, 1u, 0u) == 0u);
     }
-    /* One more tick clears FAULT_SETTLING */
-    assert(heater_ctrl_step_10ms(&c, 200u, 1u, 1u) == 0u);
+    assert(heater_ctrl_step_10ms(&c, 200u, 1u, 0u) == 0u);
     assert((c.fault_mask & FAULT_SETTLING) == 0u);
 
-    /* 2. Arming fires single 5-tick (455 us) probe pulse first */
-    assert(heater_ctrl_set_enable(&c, 1u) == HEATER_CMD_OK);
+    /* 2. Lifting iron out of stand (PB5: 0 -> 1 for 80 ms) auto-wakes with 5-tick probe pulse! */
+    for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS - 1u; ++i) {
+        assert(heater_ctrl_step_10ms(&c, 200u, 1u, 1u) == 0u);
+    }
     uint8_t duty = heater_ctrl_step_10ms(&c, 200u, 1u, 1u);
+    assert(c.armed == 1u);
+    assert(c.in_stand == 0u);
     assert(duty == PROBE_PULSE_TICKS);
     assert(c.state == HEATER_PROBE);
 
@@ -82,13 +95,19 @@ int main(void) {
     }
     assert(plant_dc >= 2850 && plant_dc <= 3150);
 
-    /* 4. Sleep stand debounce (PB5=0 -> in stand -> active_target = 100 C) */
+    /* 4. Sleep stand debounce (PB5=0 -> in stand -> active_target = 100 C), then 0 W mode */
     for (uint32_t i = 0u; i < STAND_IN_DEBOUNCE_TICKS; ++i) {
         (void)heater_ctrl_step_10ms(&c, f245_dc_to_adc(plant_dc), 1u, 0u);
     }
     assert(c.in_stand == 1u);
     assert(c.state == HEATER_SLEEP);
     assert(c.active_target_c == 100u);
+
+    /* Zero-watt sleep_temp_c == 0 cuts duty to 0 while remaining armed for lift */
+    assert(heater_ctrl_set_sleep(&c, 1u, 0u, 1u) == HEATER_CMD_OK);
+    assert(heater_ctrl_step_10ms(&c, f245_dc_to_adc(plant_dc), 1u, 0u) == 0u);
+    assert(c.state == HEATER_SLEEP && c.active_target_c == 0u);
+    assert(heater_ctrl_set_sleep(&c, 1u, 100u, 1u) == HEATER_CMD_OK);
 
     /* Lifted out of stand (PB5=1 for 80 ms) -> resumes 300 C heating */
     for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS; ++i) {

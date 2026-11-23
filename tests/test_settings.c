@@ -38,10 +38,17 @@ int main(void) {
     assert(loaded.stream_interval_ms == 250u);
 
     assert(settings_save_flash(&s) == 1);
+    assert(settings_matches_flash(&s) == 1);
     memset(&loaded, 0, sizeof(loaded));
     settings_load_safe(&loaded);
     assert(loaded.target_c == 365u);
     assert(loaded.cal_f245_deci_c == -30);
+
+    /* 0W sleep mode (sleep_temp_c == 0) must validate cleanly */
+    s.sleep_temp_c = 0u;
+    settings_finalize(&s);
+    assert(settings_validate(&s) == 1 && s.sleep_temp_c == 0u);
+    assert(settings_matches_flash(&s) == 0);
 
     /* Corrupted CRC must fall back to defaults */
     uint8_t raw[sizeof(s)];

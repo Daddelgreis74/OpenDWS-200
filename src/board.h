@@ -6,6 +6,8 @@ void board_init(void);
 void board_heater_force_off(void);
 void board_heater_set(uint8_t on);
 uint8_t board_heater_is_on(void);
+void board_power_latch(uint8_t on);
+uint8_t board_read_pb0_raw(void);
 void board_set_handle_mux(uint8_t is_f245);
 uint8_t board_get_handle_mux(void);
 uint8_t board_read_pb6_raw(void);

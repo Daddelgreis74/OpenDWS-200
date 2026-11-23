@@ -192,7 +192,9 @@ static void ui_draw_menu_dynamic(const input_state_t *inp, const ui_status_t *st
     const char *st_label;
     uint16_t st_fg, st_bg, st_bd;
     pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
-    if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
+    if (st->power_off_pending != 0u) {
+        gfx_draw_badge(62u, 4u, 112u, 18u, "POWER OFF...", COL_RED, COL_RED_DARK, COL_RED);
+    } else if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
         gfx_draw_badge(62u, 4u, 112u, 18u, "OPEN! NO TIP", COL_RED, COL_RED_DARK, COL_RED);
     } else {
         size_t p = 0u;
@@ -306,7 +308,11 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     const char *st_label;
     uint16_t st_fg, st_bg, st_bd;
     pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
-    gfx_draw_badge(78u, 4u, 88u, 18u, st_label, st_fg, st_bg, st_bd);
+    if (st->power_off_pending != 0u) {
+        gfx_draw_badge(78u, 4u, 88u, 18u, "POWER OFF!", COL_RED, COL_RED_DARK, COL_RED);
+    } else {
+        gfx_draw_badge(78u, 4u, 88u, 18u, st_label, st_fg, st_bg, st_bd);
+    }
 
     if (st->usb_connected) {
         gfx_draw_badge(172u, 4u, 68u, 18u, "USB:CDC", COL_EMERALD, COL_GREEN_DARK, COL_EMERALD);
@@ -351,14 +357,20 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     /* Setpoint line */
     size_t p = 0u;
     if (h->state == HEATER_SLEEP) {
-        p = fmt_append_str(line, p, sizeof(line), "SLP:");
-        fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
+        if (h->active_target_c == 0u) {
+            (void)fmt_append_str(line, 0u, sizeof(line), "SLP: OFF");
+        } else {
+            p = fmt_append_str(line, p, sizeof(line), "SLP:");
+            fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
+            p = fmt_append_str(line, p, sizeof(line), num);
+            (void)fmt_append_str(line, p, sizeof(line), "C");
+        }
     } else {
         p = fmt_append_str(line, p, sizeof(line), "SET:");
         fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        (void)fmt_append_str(line, p, sizeof(line), "C");
     }
-    p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), "C");
     gfx_draw_text(14u, 84u, line, (h->state == HEATER_SLEEP) ? COL_CYAN : COL_TEXT, COL_CARD, 2u);
 
     p = 0u;
@@ -430,9 +442,9 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     p = 0u;
     p = fmt_append_str(line, p, sizeof(line), "STND:");
     if (h->in_stand != 0u) {
-        p = fmt_append_str(line, p, sizeof(line), h->sleep_en ? "IN (SLP)" : "IN (IGN)");
+        p = fmt_append_str(line, p, sizeof(line), h->sleep_en ? "IN (AUTO)" : "IN (MAN) ");
     } else {
-        p = fmt_append_str(line, p, sizeof(line), "OUT     ");
+        p = fmt_append_str(line, p, sizeof(line), h->sleep_en ? "OUT(AUTO)" : "OUT(MAN) ");
     }
     gfx_draw_text(204u, 107u, line, h->in_stand ? COL_CYAN : COL_MUTED, COL_CARD, 1u);
 

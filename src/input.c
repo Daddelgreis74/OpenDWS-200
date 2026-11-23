@@ -156,3 +156,64 @@ void input_poll(uint32_t now_ms, input_state_t *out) {
 }
 
 #endif /* OPENDWS_HOST_TEST */
+
+void soft_power_init(soft_power_t *sp) {
+    if (sp == NULL) return;
+    sp->state = SOFT_PWR_WAIT_IDLE;
+    sp->edge_ms = 0u;
+    sp->candidate = 0u;
+}
+
+uint8_t soft_power_step(soft_power_t *sp, uint8_t pb0_raw, uint32_t now_ms) {
+    if (sp == NULL) return 0u;
+    uint8_t raw = pb0_raw ? 1u : 0u;
+
+    if (sp->state == SOFT_PWR_OFF) {
+        return 1u;
+    }
+
+    if (sp->state == SOFT_PWR_WAIT_IDLE) {
+        if (raw != 0u) {
+            if (sp->candidate == 0u) {
+                sp->candidate = 1u;
+                sp->edge_ms = now_ms;
+            } else if ((uint32_t)(now_ms - sp->edge_ms) >= 30u) {
+                sp->state = SOFT_PWR_ARMED;
+                sp->candidate = 0u;
+            }
+        } else {
+            sp->candidate = 0u;
+        }
+        return 0u;
+    }
+
+    if (sp->state == SOFT_PWR_ARMED) {
+        if (raw == 0u) {
+            if (sp->candidate == 0u) {
+                sp->candidate = 1u;
+                sp->edge_ms = now_ms;
+            } else if ((uint32_t)(now_ms - sp->edge_ms) >= 30u) {
+                sp->state = SOFT_PWR_PRESSED;
+                sp->candidate = 0u;
+            }
+        } else {
+            sp->candidate = 0u;
+        }
+        return 0u;
+    }
+
+    /* SOFT_PWR_PRESSED: trigger OFF cleanly on release (LOW -> HIGH >= 20 ms) */
+    if (raw != 0u) {
+        if (sp->candidate == 0u) {
+            sp->candidate = 1u;
+            sp->edge_ms = now_ms;
+        } else if ((uint32_t)(now_ms - sp->edge_ms) >= 20u) {
+            sp->state = SOFT_PWR_OFF;
+            sp->candidate = 0u;
+            return 1u;
+        }
+    } else {
+        sp->candidate = 0u;
+    }
+    return 0u;
+}

@@ -34,7 +34,19 @@ static uint32_t adjust_item(menu_item_t item, opendws_settings_t *s, uint8_t is_
     if (s == NULL) return MENU_ACT_NONE;
     switch (item) {
     case MENU_ITEM_SLEEP_TEMP:
-        s->sleep_temp_c = step_u16(s->sleep_temp_c, (int16_t)(dir * 10), (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
+        if (dir < 0) {
+            if (s->sleep_temp_c <= SLEEP_TEMP_MIN_C) {
+                s->sleep_temp_c = 0u;
+            } else {
+                s->sleep_temp_c = step_u16(s->sleep_temp_c, -10, (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
+            }
+        } else {
+            if (s->sleep_temp_c == 0u) {
+                s->sleep_temp_c = (uint16_t)SLEEP_TEMP_MIN_C;
+            } else {
+                s->sleep_temp_c = step_u16(s->sleep_temp_c, 10, (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
+            }
+        }
         return MENU_ACT_CHANGED_SLEEP;
     case MENU_ITEM_SLEEP_EN:
         s->sleep_en = s->sleep_en ? 0u : 1u;
@@ -157,7 +169,7 @@ uint32_t menu_handle_key(
 const char *menu_item_label(menu_item_t item, uint8_t is_f245) {
     switch (item) {
     case MENU_ITEM_SLEEP_TEMP: return "Sleep Temp";
-    case MENU_ITEM_SLEEP_EN:   return "Sleep Stand";
+    case MENU_ITEM_SLEEP_EN:   return "Auto Stand";
     case MENU_ITEM_PRESET1:    return "Preset CH1";
     case MENU_ITEM_PRESET2:    return "Preset CH2";
     case MENU_ITEM_PRESET3:    return "Preset CH3";
@@ -187,9 +199,13 @@ void menu_format_value(
 
     switch (item) {
     case MENU_ITEM_SLEEP_TEMP:
-        fmt_uint_pad(num, sizeof(num), s->sleep_temp_c, 1u, '0');
-        p = fmt_append_str(buf, p, cap, num);
-        (void)fmt_append_str(buf, p, cap, " C");
+        if (s->sleep_temp_c == 0u) {
+            (void)fmt_append_str(buf, p, cap, "OFF (0W)");
+        } else {
+            fmt_uint_pad(num, sizeof(num), s->sleep_temp_c, 1u, '0');
+            p = fmt_append_str(buf, p, cap, num);
+            (void)fmt_append_str(buf, p, cap, " C");
+        }
         break;
     case MENU_ITEM_SLEEP_EN:
         (void)fmt_append_str(buf, p, cap, s->sleep_en ? "ON" : "OFF");

@@ -109,6 +109,7 @@ typedef struct {
 void heater_ctrl_init(
     heater_ctrl_t *c,
     uint8_t initial_pb6,
+    uint8_t initial_pb5,
     uint16_t target_c,
     uint16_t sleep_temp_c,
     uint8_t sleep_en,

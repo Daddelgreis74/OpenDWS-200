@@ -30,4 +30,5 @@ void settings_finalize(opendws_settings_t *s);
 int settings_validate(const opendws_settings_t *s);
 int settings_load_from_buffer(const void *buf, size_t len, opendws_settings_t *out);
 void settings_load_safe(opendws_settings_t *out);
+int settings_matches_flash(const opendws_settings_t *s);
 int settings_save_flash(const opendws_settings_t *s);

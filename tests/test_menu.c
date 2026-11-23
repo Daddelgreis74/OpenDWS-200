@@ -33,7 +33,12 @@ int main(void) {
     for (int i = 0; i < 10; ++i) {
         (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
     }
-    assert(s.sleep_temp_c == SLEEP_TEMP_MIN_C); /* 50 C */
+    assert(s.sleep_temp_c == 0u); /* 50 C -> 0 (OFF 0W) */
+    char sval[24];
+    menu_format_value(MENU_ITEM_SLEEP_TEMP, &s, 1u, 0u, sval, sizeof(sval));
+    assert(strcmp(sval, "OFF (0W)") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert(s.sleep_temp_c == SLEEP_TEMP_MIN_C); /* back to 50 C */
     /* Exit edit mode via PC11 (Back), keep menu open */
     (void)menu_handle_key(&m, KEY_BIT_PC11, &s, 1u);
     assert(m.open == 1u && m.editing == 0u);

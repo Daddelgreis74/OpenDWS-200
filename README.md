@@ -6,12 +6,16 @@
 Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-W-Präzisionslötstation (MCU: Artery `AT32F415RCT7`, ARM Cortex-M4 ohne FPU, `144 MHz`).
 
 > [!IMPORTANT]
-> **Phase 2 — Geschlossene PID-Regelung & Hardwareschutz (`v0.2.0-phase2`)**
-> Die Heizung startet beim Einschalten **immer im sicheren `STANDBY` (`PA2 = LOW`)** und schaltet erst nach expliziter Benutzerfreigabe (`MODE/OK` am Gerät oder `HEAT ON` per USB) sowie bestandener **24-V-Rail-Prüfung (`15–30 V`)** und **Spitzen-Prüfung** frei. Im reinen USB-5-V-Betrieb bleibt Heizen automatisch gesperrt.
+> **Phase 2 — Geschlossene PID-Regelung, Auto-Ständer & Soft-Power (`v0.2.2-phase2`)**
+> Die Station startet sicher im **`STANDBY` (`PA2 = LOW`)**. Beim **Entnehmen des Kolbens aus dem Ständer (`PB5`)** wacht sie bei anliegender `24-V`-Schiene automatisch auf und heizt los; beim **Zurücklegen** geht sie selbsttätig in den Sleep-Modus (`100 °C` bzw. optional `0 W`). Der **Power-Button (`PB0`/`PB1`)** speichert geänderte Settings und schaltet die Station sauber ab.
 
 ---
 
 ## 🌟 Features (Phase 2)
+
+- **⚡ Originalgetreuer Auto-Ständer (`PB5`) & Soft-Power (`PB0`/`PB1`):**
+  - Entnahme aus dem Ständer (`PB5: LOW→HIGH`) weckt automatisch mit `455-µs`-Prüfpuls auf Solltemperatur; Zurücklegen (`PB5 = LOW`) aktiviert automatisch Sleep (`100 °C` Standard, oder `0 W` kalt). Liegt der Kolben beim Einschalten bereits außerhalb des Ständers, bleibt die Heizung aus Sicherheitsgründen aus.
+  - Power-Button (`PB0`) speichert geänderte Settings im Flash `0x0803F800` und schaltet über `PB1 = LOW` hart ab.
 
 - **🔥 `100 Hz` Blanking & `91 µs` PID-Regelung (`TMR1` + `TMR2`):**
   - Verifiziertes DC-Blanking aus `APP_DWS_200_V1.5`: `1,0 ms` nach `PA2 = LOW` misst `PC0` die Thermospannung ohne Heizstrom-Störung (`alpha = 0,2` EMA).

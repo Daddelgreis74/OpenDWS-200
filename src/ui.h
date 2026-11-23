@@ -21,6 +21,7 @@ typedef struct {
     uint8_t backlight_pct;
     uint8_t led_mask;
     uint8_t save_toast_active;
+    uint8_t power_off_pending;
     uint32_t uptime_ms;
 } ui_status_t;
 

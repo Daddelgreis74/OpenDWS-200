@@ -5,6 +5,7 @@
 
 static volatile uint32_t g_ticks_ms = 0u;
 static volatile uint8_t g_heater_on = 0u;
+static volatile uint8_t g_power_latch_on = 1u;
 static uint8_t g_handle_mux_f245 = 1u;
 static uint8_t g_timers_started = 0u;
 static uint32_t g_buzzer_off_ms = 0u;
@@ -35,6 +36,20 @@ void board_heater_set(uint8_t on) {
 
 uint8_t board_heater_is_on(void) {
     return g_heater_on;
+}
+
+void board_power_latch(uint8_t on) {
+    if (on != 0u) {
+        GPIO_SCR(GPIOB_BASE) = (1u << 1);
+        g_power_latch_on = 1u;
+    } else {
+        GPIO_CLR(GPIOB_BASE) = (1u << 1);
+        g_power_latch_on = 0u;
+    }
+}
+
+uint8_t board_read_pb0_raw(void) {
+    return (GPIO_IDT(GPIOB_BASE) & (1u << 0)) != 0u ? 1u : 0u;
 }
 
 void board_set_handle_mux(uint8_t is_f245) {
@@ -333,6 +348,8 @@ void board_init(void) {}
 void board_heater_force_off(void) { g_heater_on = 0u; }
 void board_heater_set(uint8_t on) { g_heater_on = on ? 1u : 0u; }
 uint8_t board_heater_is_on(void) { return g_heater_on; }
+void board_power_latch(uint8_t on) { g_power_latch_on = on ? 1u : 0u; (void)g_power_latch_on; }
+uint8_t board_read_pb0_raw(void) { return 1u; }
 void board_set_handle_mux(uint8_t is_f245) { g_handle_mux_f245 = is_f245 ? 1u : 0u; }
 uint8_t board_get_handle_mux(void) { return g_handle_mux_f245; }
 uint8_t board_read_pb6_raw(void) { return 1u; }

@@ -44,6 +44,24 @@ int main(void) {
     assert(st.held_mask == 0u);
     assert(st.released_mask == KEY_BIT_PB3);
 
+    /* Soft-power PB0 state machine: boot held LOW stays WAIT_IDLE, then HIGH->LOW->HIGH triggers OFF */
+    soft_power_t sp;
+    soft_power_init(&sp);
+    assert(soft_power_step(&sp, 0u, 100u) == 0u && sp.state == SOFT_PWR_WAIT_IDLE);
+    assert(soft_power_step(&sp, 0u, 600u) == 0u && sp.state == SOFT_PWR_WAIT_IDLE);
+    assert(soft_power_step(&sp, 1u, 610u) == 0u && sp.state == SOFT_PWR_WAIT_IDLE);
+    assert(soft_power_step(&sp, 1u, 640u) == 0u && sp.state == SOFT_PWR_ARMED);
+
+    /* Glitch < 30 ms must not arm power-off */
+    assert(soft_power_step(&sp, 0u, 700u) == 0u);
+    assert(soft_power_step(&sp, 1u, 710u) == 0u && sp.state == SOFT_PWR_ARMED);
+
+    /* Real press (>= 30 ms) enters PRESSED, release (>= 20 ms) returns 1 (POWER OFF) */
+    assert(soft_power_step(&sp, 0u, 800u) == 0u);
+    assert(soft_power_step(&sp, 0u, 830u) == 0u && sp.state == SOFT_PWR_PRESSED);
+    assert(soft_power_step(&sp, 1u, 900u) == 0u && sp.state == SOFT_PWR_PRESSED);
+    assert(soft_power_step(&sp, 1u, 920u) == 1u && sp.state == SOFT_PWR_OFF);
+
     printf("test_input: PASS\n");
     return 0;
 }

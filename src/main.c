@@ -215,6 +215,49 @@ static void adjust_target_step(app_ctx_t *app, int16_t delta_c) {
     }
 }
 
+static void perform_soft_power_off(app_ctx_t *app) {
+    (void)heater_set_enable(0u);
+    board_timers_pause();
+    board_heater_force_off();
+
+    sync_settings_from_runtime(app);
+    if (!settings_matches_flash(&app->settings)) {
+        (void)settings_save_flash(&app->settings);
+        board_timers_pause();
+        board_heater_force_off();
+    }
+
+    app_beep(app, 70u);
+    uint32_t t0 = board_ticks_ms();
+    while ((uint32_t)(board_ticks_ms() - t0) < 85u) {
+        board_heater_force_off();
+        board_wdt_feed();
+        board_buzzer_tick(board_ticks_ms());
+    }
+    board_buzzer_beep(0u);
+    board_set_leds(0u);
+    board_set_backlight(0u);
+
+    /* Drop PB1 soft-power latch (kills mains PSU; if USB 5V remains, wait for power-on press) */
+    board_power_latch(0u);
+
+    soft_power_t wake;
+    soft_power_init(&wake);
+    uint32_t off_ms = board_ticks_ms();
+    for (;;) {
+        board_heater_force_off();
+        board_power_latch(0u);
+        board_wdt_feed();
+        usb_cdc_poll();
+        uint32_t now = board_ticks_ms();
+        if ((uint32_t)(now - off_ms) > 400u) {
+            if (soft_power_step(&wake, board_read_pb0_raw(), now) != 0u) {
+                board_reboot();
+            }
+        }
+    }
+}
+
 static void apply_menu_actions(app_ctx_t *app, uint32_t act, uint32_t now) {
     if ((act & MENU_ACT_CHANGED_SLEEP) != 0u) {
         (void)heater_set_sleep(app->settings.sleep_en, app->settings.sleep_temp_c, 1u);
@@ -343,8 +386,13 @@ int main(void) {
     ui_st.backlight_pct = board_get_backlight();
     ui_st.led_mask = board_get_leds();
     ui_st.save_toast_active = 0u;
+    ui_st.power_off_pending = 0u;
     ui_st.uptime_ms = board_ticks_ms();
     ui_draw_dynamic(&snap, &inp, &ui_st);
+
+    soft_power_t soft_pwr;
+    soft_power_init(&soft_pwr);
+    heater_state_t prev_heater_state = app.hst.state;
 
     uint32_t last_sample_ms = ui_st.uptime_ms;
     uint32_t last_ui_ms = ui_st.uptime_ms;
@@ -358,6 +406,14 @@ int main(void) {
         uint32_t now = board_ticks_ms();
         board_buzzer_tick(now);
         usb_cdc_poll();
+
+        soft_pwr_state_t prev_pwr_st = soft_pwr.state;
+        if (soft_power_step(&soft_pwr, board_read_pb0_raw(), now) != 0u) {
+            perform_soft_power_off(&app);
+        }
+        if (prev_pwr_st != SOFT_PWR_PRESSED && soft_pwr.state == SOFT_PWR_PRESSED) {
+            app_beep(&app, 30u);
+        }
 
         input_poll(now, &inp);
 
@@ -471,6 +527,14 @@ int main(void) {
         }
 
         heater_get_status(&app.hst);
+        if ((prev_heater_state == HEATER_STANDBY || prev_heater_state == HEATER_SLEEP) &&
+            (app.hst.state == HEATER_PROBE || app.hst.state == HEATER_HEATING)) {
+            app_beep(&app, 35u);
+        } else if (prev_heater_state == HEATER_HEATING && app.hst.state == HEATER_SLEEP) {
+            app_beep(&app, 20u);
+        }
+        prev_heater_state = app.hst.state;
+
         protocol_tick(
             &proto,
             &snap,
@@ -501,6 +565,7 @@ int main(void) {
             ui_st.backlight_pct = board_get_backlight();
             ui_st.led_mask = board_get_leds();
             ui_st.save_toast_active = ((int32_t)(app.save_toast_until_ms - now) > 0) ? 1u : 0u;
+            ui_st.power_off_pending = (soft_pwr.state == SOFT_PWR_PRESSED) ? 1u : 0u;
             ui_st.uptime_ms = now;
             ui_draw_dynamic(&snap, &inp, &ui_st);
         }

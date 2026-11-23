@@ -49,3 +49,19 @@ void input_update_from_raw(
 
 void input_init(void);
 void input_poll(uint32_t now_ms, input_state_t *out);
+
+typedef enum {
+    SOFT_PWR_WAIT_IDLE = 0,
+    SOFT_PWR_ARMED     = 1,
+    SOFT_PWR_PRESSED   = 2,
+    SOFT_PWR_OFF       = 3
+} soft_pwr_state_t;
+
+typedef struct {
+    soft_pwr_state_t state;
+    uint32_t edge_ms;
+    uint8_t candidate;
+} soft_power_t;
+
+void soft_power_init(soft_power_t *sp);
+uint8_t soft_power_step(soft_power_t *sp, uint8_t pb0_raw, uint32_t now_ms);

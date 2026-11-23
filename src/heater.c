@@ -22,6 +22,7 @@ static uint16_t clamp_target_c(uint16_t t) {
 }
 
 static uint16_t clamp_sleep_temp_c(uint16_t t) {
+    if (t == 0u) return 0u;
     if (t < SLEEP_TEMP_MIN_C) return SLEEP_TEMP_MIN_C;
     if (t > SLEEP_TEMP_MAX_C) return SLEEP_TEMP_MAX_C;
     return t;
@@ -36,6 +37,7 @@ static int16_t clamp_cal_dc(int16_t cal_dc) {
 void heater_ctrl_init(
     heater_ctrl_t *c,
     uint8_t initial_pb6,
+    uint8_t initial_pb5,
     uint16_t target_c,
     uint16_t sleep_temp_c,
     uint8_t sleep_en,
@@ -57,7 +59,8 @@ void heater_ctrl_init(
     c->pb6_debounce_cnt = 0u;
     c->settle_ticks = HANDLE_SETTLE_TICKS;
     c->stand_cnt = 0u;
-    c->in_stand = 0u;
+    /* PB5==0 -> in stand; if already out of stand at boot (PB5==1), NO auto-wake edge! */
+    c->in_stand = (initial_pb5 == 0u) ? 1u : 0u;
     c->fault_mask = FAULT_SETTLING;
 
     c->tip_raw = 0u;
@@ -145,14 +148,18 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
 
     /* 2. Sleep stand debounce (PB5: LOW = resting in stand, HIGH = lifted) */
     uint8_t raw_in_stand = (pb5_raw == 0u) ? 1u : 0u;
-    if (raw_in_stand != c->in_stand) {
+    uint8_t lifted_edge = 0u;
+    if (c->settle_ticks == 0u && raw_in_stand != c->in_stand) {
         c->stand_cnt++;
         uint8_t needed = raw_in_stand ? STAND_IN_DEBOUNCE_TICKS : STAND_OUT_DEBOUNCE_TICKS;
         if (c->stand_cnt >= needed) {
+            if (c->in_stand != 0u && raw_in_stand == 0u) {
+                lifted_edge = 1u;
+            }
             c->in_stand = raw_in_stand;
             c->stand_cnt = 0u;
         }
-    } else {
+    } else if (raw_in_stand == c->in_stand) {
         c->stand_cnt = 0u;
     }
 
@@ -216,7 +223,7 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
         return 0u;
     }
 
-    /* 7. Rail / latched fault check & Standby check */
+    /* 7. Rail / latched fault check & Auto-Wake / Standby check */
     uint16_t active_faults = c->fault_mask & (uint16_t)~FAULT_SETTLING;
     if (active_faults != 0u) {
         c->duty_ticks = 0u;
@@ -224,6 +231,19 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
         reset_pid(c);
         c->state = HEATER_FAULT;
         return 0u;
+    }
+
+    /* Automatic wake-up on stand lift (PB5: 0 -> 1) when Auto Stand enabled & safe */
+    if (lifted_edge != 0u && c->sleep_en != 0u) {
+        if (c->armed == 0u) {
+            c->armed = 1u;
+            c->probe_pending = 1u;
+            c->cur_peak_ma = 0;
+            reset_pid(c);
+        } else if (c->sleep_temp_c == 0u) {
+            c->probe_pending = 1u;
+            reset_pid(c);
+        }
     }
 
     if (c->armed == 0u) {
@@ -246,8 +266,15 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
 
     /* 9. Active setpoint (Sleep in stand vs Active target) */
     if (c->sleep_en != 0u && c->in_stand != 0u) {
-        c->active_target_c = (c->sleep_temp_c < c->target_c) ? c->sleep_temp_c : c->target_c;
         c->state = HEATER_SLEEP;
+        if (c->sleep_temp_c == 0u) {
+            c->active_target_c = 0u;
+            c->duty_ticks = 0u;
+            c->duty_pct = 0u;
+            reset_pid(c);
+            return 0u;
+        }
+        c->active_target_c = (c->sleep_temp_c < c->target_c) ? c->sleep_temp_c : c->target_c;
     } else {
         c->active_target_c = c->target_c;
         c->state = HEATER_HEATING;
@@ -465,7 +492,7 @@ heater_cmd_err_t heater_ctrl_set_target(heater_ctrl_t *c, uint16_t temp_c) {
 heater_cmd_err_t heater_ctrl_set_sleep(heater_ctrl_t *c, uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp) {
     if (c == NULL) return HEATER_CMD_ERR_FAULT;
     if (update_temp != 0u) {
-        if (sleep_temp_c < SLEEP_TEMP_MIN_C || sleep_temp_c > SLEEP_TEMP_MAX_C) {
+        if (sleep_temp_c != 0u && (sleep_temp_c < SLEEP_TEMP_MIN_C || sleep_temp_c > SLEEP_TEMP_MAX_C)) {
             return HEATER_CMD_ERR_RANGE;
         }
         c->sleep_temp_c = sleep_temp_c;
@@ -681,6 +708,7 @@ void heater_init(
     heater_ctrl_init(
         &g_ctrl,
         board_read_pb6_raw(),
+        board_read_pb5_raw(),
         target_c,
         sleep_temp_c,
         sleep_en,
@@ -778,7 +806,7 @@ void heater_init(
     int16_t cal_f210_dc
 ) {
     heater_ctrl_init(
-        &g_ctrl, 1u, target_c, sleep_temp_c, sleep_en, cal_f245_dc, cal_f210_dc, board_set_handle_mux
+        &g_ctrl, 1u, 0u, target_c, sleep_temp_c, sleep_en, cal_f245_dc, cal_f210_dc, board_set_handle_mux
     );
     heater_ctrl_update_rail(&g_ctrl, 1780u);
     heater_ctrl_sample_current_slot5(&g_ctrl, 2048u, 0u);

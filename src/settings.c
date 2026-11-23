@@ -57,7 +57,9 @@ void settings_finalize(opendws_settings_t *s) {
     for (uint32_t i = 0u; i < 3u; ++i) {
         s->presets_c[i] = clamp_u16(s->presets_c[i], (uint16_t)TEMP_MIN_C, (uint16_t)TEMP_MAX_C);
     }
-    s->sleep_temp_c = clamp_u16(s->sleep_temp_c, (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
+    if (s->sleep_temp_c != 0u) {
+        s->sleep_temp_c = clamp_u16(s->sleep_temp_c, (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
+    }
     s->cal_f245_deci_c = clamp_i16(s->cal_f245_deci_c, (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
     s->cal_f210_deci_c = clamp_i16(s->cal_f210_deci_c, (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
     s->stream_interval_ms = clamp_u16(s->stream_interval_ms, (uint16_t)STREAM_MIN_MS, (uint16_t)STREAM_MAX_MS);
@@ -90,7 +92,8 @@ int settings_validate(const opendws_settings_t *s) {
             return 0;
         }
     }
-    if (s->sleep_temp_c < SLEEP_TEMP_MIN_C || s->sleep_temp_c > SLEEP_TEMP_MAX_C) {
+    if (s->sleep_temp_c != 0u &&
+        (s->sleep_temp_c < SLEEP_TEMP_MIN_C || s->sleep_temp_c > SLEEP_TEMP_MAX_C)) {
         return 0;
     }
     if (s->cal_f245_deci_c < (int16_t)(CAL_OFFSET_MIN_C * 10) ||
@@ -129,6 +132,16 @@ int settings_load_from_buffer(const void *buf, size_t len, opendws_settings_t *o
 void settings_load_safe(opendws_settings_t *out) {
     const void *flash_ptr = (const void *)(uintptr_t)SETTINGS_FLASH_ADDR;
     (void)settings_load_from_buffer(flash_ptr, sizeof(opendws_settings_t), out);
+}
+
+int settings_matches_flash(const opendws_settings_t *s) {
+    if (s == NULL) {
+        return 0;
+    }
+    opendws_settings_t copy;
+    memcpy(&copy, s, sizeof(copy));
+    settings_finalize(&copy);
+    return (memcmp((const void *)(uintptr_t)SETTINGS_FLASH_ADDR, &copy, sizeof(copy)) == 0) ? 1 : 0;
 }
 
 int settings_save_flash(const opendws_settings_t *s) {
@@ -206,6 +219,16 @@ void settings_load_safe(opendws_settings_t *out) {
         return;
     }
     settings_defaults(out);
+}
+
+int settings_matches_flash(const opendws_settings_t *s) {
+    if (s == NULL || g_host_flash_valid == 0u) {
+        return 0;
+    }
+    opendws_settings_t copy;
+    memcpy(&copy, s, sizeof(copy));
+    settings_finalize(&copy);
+    return (memcmp(&g_host_flash_sim, &copy, sizeof(copy)) == 0) ? 1 : 0;
 }
 
 int settings_save_flash(const opendws_settings_t *s) {

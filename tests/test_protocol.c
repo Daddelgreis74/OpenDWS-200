@@ -190,13 +190,13 @@ int main(void) {
     assert(m.hst.sleep_en == 0u);
 
     reset_out(&m);
-    protocol_handle_line(&proto, "SLEEP 90", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
-    assert(strcmp(m.out, "OK SLEEP=90\r\n") == 0);
-    assert(m.hst.sleep_temp_c == 90u);
+    protocol_handle_line(&proto, "SLEEP 0", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK SLEEP=0\r\n") == 0);
+    assert(m.hst.sleep_temp_c == 0u);
 
     reset_out(&m);
     protocol_handle_line(&proto, "SLEEP 30", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
-    assert(strcmp(m.out, "ERR SLEEP_RANGE_50_250\r\n") == 0);
+    assert(strcmp(m.out, "ERR SLEEP_RANGE_0_OR_50_250\r\n") == 0);
 
     reset_out(&m);
     protocol_handle_line(&proto, "CAL -12", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);

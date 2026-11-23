@@ -46,10 +46,9 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Hauptschirm: `HEAT` ↔ `STANDBY` (Langdruck: Flash-Save); im Menü: Auswählen/Ändern/Speichern |
 | `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Hauptschirm: Sollwert `+5 °C` (Langdruck `+25 °C`); im Menü: Runter / Wert `+` |
 | `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Öffnet und schließt das **On-Screen-Einstellungsmenü** (Sleep `100 °C`, Presets, Kalibrierung, Backlight, Buzzer, Stream, Save) |
-| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (`LOW` = im Ständer, `HIGH` = entnommen) |
-| `PB6` | Griff-Erkennung | Input Pull-Up | **Verifiziert:** `HIGH` (`1`) = **`F245`**, `LOW` (`0`) = **`F210`** |
-| `PC13, PC14, PC15` | Griff-Mux / Gain-Steuerung | Output Push-Pull | Analogbereich-Umschaltung via Backup-Domain-Unlock (`F245`: `PC14=1, PC13/15=0`; `F210`: `PC14=0, PC13/15=1`) |
-| `PB0` | Soft-Power-Taster / Diag | Input Pull-Up | Flankensequenz steuert Power-Latch `PB1` |
+| `PB0` | Soft-Power-Taster | Input Pull-Up | Momentan-Taster (`HIGH→LOW→HIGH` beim Loslassen speichert geänderte Settings und zieht `PB1 = LOW`) |
+| `PB1` | Soft-Power-Latch | Output Push-Pull `HIGH` | Hält System aktiv (`HIGH` ab Reset); wird beim Ausschalten über Power-Taster auf `LOW` geschaltet |
+| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | `LOW` = im Ständer (`SLEEP` `100 °C` / `0 W`), `HIGH` = entnommen (**automatisches Aufwecken/Heizen** ohne Tastendruck; beim Boot außerhalb des Ständers sicher im `STANDBY`) |
 | `PB2` | Diag-Eingang | Input Pull-Down | Live-Monitoring |
 | `PB10, PB11` | Bit-Bang `I2C` | Output / Open-Drain | Nebenbus für Slave-Adresse `0x78` (optionales Power-/Display-IC) |
 | `PF4, PF5` | Front-LEDs 0..1 | Output Push-Pull | Status-LEDs |
