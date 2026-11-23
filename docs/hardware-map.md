@@ -41,11 +41,11 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PC0` | `ADC1_IN10` | Analog (239,5 Cycl.) | Lötspitzen-Thermoelement |
 | `PC1` | `ADC1_IN11` | Analog (55,5 Cycl.) | Hall-Stromsensor (`66 mV/A`, Nullpunkt `1,65 V`) |
 | `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | Hilfs-/Kaltstellen-Referenz |
-| `PD2` | Taste 0 | Input Pull-Up (Active-LOW) | Phase 1: LED-Lauflicht an/aus |
-| `PB3` | Taste 1 | Input Pull-Up (Active-LOW) | Phase 1: Backlight `-10%` (`SWJTAG_CONF=0b010`!) |
-| `PB4` | Taste 2 | Input Pull-Up (Active-LOW) | Phase 1: Backlight `+10%` (`SWJTAG_CONF=0b010`!) |
-| `PC12` | Taste 3 | Input Pull-Up (Active-LOW) | Phase 1: USB-Stream an/aus |
-| `PC11` | Taste 4 | Input Pull-Up (Active-LOW) | Phase 1: Buzzer-Testton |
+| `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 1: Buzzer-Testton |
+| `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 1: USB-Stream an/aus |
+| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Phase 1: LED-Lauflicht an/aus |
+| `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `-10%` (`SWJTAG_CONF=0b010`!) |
+| `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Phase 1: Backlight `+10%` (`SWJTAG_CONF=0b010`!) |
 | `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (IRQ 23) |
 | `PB6` | Griff-Erkennung | Input Pull-Up | Unterscheidet `F245` / `F210` |
 | `PB0` | Diag-Eingang | Input Pull-Up | Live-Monitoring |
@@ -62,6 +62,15 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 
 ## 5. USB & IOMUX Besonderheiten (AT32F415)
 
-- `OTG_GCCFG` (`0x50000038`) muss `(1 << 16) | (1 << 21)` setzen (`PWRDOWN=1` = interner PHY aktiv, `VBUSIG=1` = ignoriert `PA9` VBUS-Detection).
+- `OTG_GCCFG` (`0x50000038`) muss `0x002D0000` setzen (`PWRDOWN | AVALIDSEN | BVALIDSEN | VBUSIG` = Bits `16, 18, 19, 21`), **bevor** `OTG_GUSBCFG` in den Device-Mode (`FDEVMODE`, `TRDT = 5`) umgeschaltet wird (verifiziert gegen `IPS3608` auf identischem AT32F415-Silizium).
 - `IOMUX_REMAP` (`0x40010004`) setzt `SWJTAG_CONF = 0b010`, um `PB3`/`PB4` von JTAG zu lösen, ohne SWD zu deaktivieren.
 - `IOMUX_REMAP4` (`0x40010024`) setzt Bits `[11:8] = 0x3` (`TMR3_GMUX_0011`), um `TMR3_CH3/CH4` auf `PC8/PC9` zu legen (verifiziert aus `APP_DWS_200_V1.5` `0x08013152`).
+
+## 6. Verifizierte Phase-1-Messwerte (v0.1.1-bringup, COM7)
+
+- **USB-CDC Enumeration:** `USB\VID_2E3C&PID_5740\DWS200-P1` (`COM7`, `144 MHz` PLL / `48 MHz` USB-Takt verifiziert).
+- **`PC0` (`TIP`):** `11..25 raw` (`9..20 mV`) bei Raumtemperatur.
+- **`PC1` (`CUR`):** `2037..2038 raw` (`1642 mV`, ca. `-8 mV` Ruhe-Offset zum theoretischen `1650 mV`-Nullpunkt).
+- **`PA3` (`AUX`):** Initial `180 raw` (`145 mV`), sprang nach Griff-/Stromänderung auf `1777..1780 raw` (`1432..1434 mV`; genaue Funktion folgt in Phase-2-RE).
+- **`PB5` (`EXINT5`):** Als mechanischer Ständer-/Schlafkontakt bestätigt (`pb5_cnt = 115` Prellflanken beim Bewegen im Ständer, im Ruhezustand konstant).
+- **Sicherheitsverriegelung:** `PA2` bleibt permanent `LOW` (`heater=0`), `HEAT 1` und `TEMP 350` liefern `ERR HEATER_LOCKED_IN_SAFE_MODE`.
