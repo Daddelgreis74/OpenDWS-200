@@ -1,5 +1,7 @@
 #include "input.h"
 
+#include <stddef.h>
+
 #include "hw.h"
 
 static input_debouncer_t g_debouncer;
