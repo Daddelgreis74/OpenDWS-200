@@ -54,7 +54,8 @@ void heater_ctrl_init(
     c->cal_f210_dc = clamp_cal_dc(cal_f210_dc);
 
     c->state = HEATER_STANDBY;
-    c->armed = 0u; /* Boot-safe invariant: NEVER start heating automatically */
+    c->armed = 0u; /* Boot-safe invariant: NEVER start heating to full target without lift/cmd */
+    c->boot_auto_standby_done = 0u;
     c->is_f245 = initial_pb6 ? 1u : 0u;
     c->pb6_debounce_cnt = 0u;
     c->settle_ticks = HANDLE_SETTLE_TICKS;
@@ -231,6 +232,16 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
         reset_pid(c);
         c->state = HEATER_FAULT;
         return 0u;
+    }
+
+    /* Automatic standby preheat after boot when resting in stand with valid rail & tip */
+    if (c->armed == 0u && c->boot_auto_standby_done == 0u &&
+        c->sleep_en != 0u && c->in_stand != 0u && c->sleep_temp_c > 0u) {
+        c->armed = 1u;
+        c->boot_auto_standby_done = 1u;
+        c->probe_pending = 1u;
+        c->cur_peak_ma = 0;
+        reset_pid(c);
     }
 
     /* Automatic wake-up on stand lift (PB5: 0 -> 1) when Auto Stand enabled & safe */
@@ -443,6 +454,7 @@ heater_cmd_err_t heater_ctrl_set_enable(heater_ctrl_t *c, uint8_t enable) {
 
     if (enable == 0u) {
         c->armed = 0u;
+        c->boot_auto_standby_done = 1u;
         c->duty_ticks = 0u;
         c->duty_pct = 0u;
         reset_pid(c);
@@ -581,6 +593,34 @@ uint8_t heater_ready_notify_step(heater_ready_notify_t *n, const heater_status_t
             n->announced = 1u;
             return 1u;
         }
+    }
+    return 0u;
+}
+
+void heater_open_tip_alarm_init(heater_open_tip_alarm_t *a) {
+    if (a == NULL) {
+        return;
+    }
+    a->active = 0u;
+    a->next_beep_ms = 0u;
+}
+
+uint8_t heater_open_tip_alarm_step(heater_open_tip_alarm_t *a, uint16_t fault_mask, uint32_t now_ms) {
+    if (a == NULL) {
+        return 0u;
+    }
+    if ((fault_mask & FAULT_OPEN_TIP) == 0u) {
+        a->active = 0u;
+        return 0u;
+    }
+    if (a->active == 0u) {
+        a->active = 1u;
+        a->next_beep_ms = now_ms + OPEN_TIP_BEEP_INTERVAL_MS;
+        return 1u;
+    }
+    if ((int32_t)(now_ms - a->next_beep_ms) >= 0) {
+        a->next_beep_ms = now_ms + OPEN_TIP_BEEP_INTERVAL_MS;
+        return 1u;
     }
     return 0u;
 }

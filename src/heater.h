@@ -43,6 +43,7 @@ typedef struct {
     /* Operating state */
     heater_state_t state;
     uint8_t  armed;
+    uint8_t  boot_auto_standby_done;
     uint8_t  is_f245;
     uint8_t  pb6_debounce_cnt;
     uint16_t settle_ticks;
@@ -138,6 +139,17 @@ typedef struct {
 
 void heater_ready_notify_init(heater_ready_notify_t *n);
 uint8_t heater_ready_notify_step(heater_ready_notify_t *n, const heater_status_t *st);
+
+/* Missing/open-tip repeating alarm notifier */
+#define OPEN_TIP_BEEP_INTERVAL_MS 1500u
+
+typedef struct {
+    uint8_t  active;
+    uint32_t next_beep_ms;
+} heater_open_tip_alarm_t;
+
+void heater_open_tip_alarm_init(heater_open_tip_alarm_t *a);
+uint8_t heater_open_tip_alarm_step(heater_open_tip_alarm_t *a, uint16_t fault_mask, uint32_t now_ms);
 
 /* String formatting helpers */
 const char *heater_state_name(heater_state_t st);

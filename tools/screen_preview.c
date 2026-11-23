@@ -38,37 +38,37 @@ int main(void) {
     ui_status_t ui_st;
     char path[256];
 
-    /* Screen 1: Boot-Safe Standby (F245 handle, 22.9V rail present, PA2 OFF) */
+    /* Screen 1: Boot Auto-Standby Preheat (F245 in stand, preheating/holding 100 C) */
     display_init();
-    populate_sample_trace(&st, 22u, 2038u, 1779u, 24u, 24u);
+    populate_sample_trace(&st, 720u, 2130u, 1779u, 25u, 100u);
     inp = (input_state_t){
         .held_mask = 0u,
         .pb5_sleep = 0u,
         .pb6_handle = 1u,
         .pb0_raw = 1u,
         .pb2_raw = 0u,
-        .pb5_edges = 2u
+        .pb5_edges = 0u
     };
     ui_st = (ui_status_t){
         .hst = {
-            .state = HEATER_STANDBY,
-            .armed = 0u,
+            .state = HEATER_SLEEP,
+            .armed = 1u,
             .is_f245 = 1u,
             .in_stand = 1u,
             .sleep_en = 1u,
             .fault_mask = FAULT_NONE,
             .target_c = 300u,
-            .active_target_c = 300u,
+            .active_target_c = 100u,
             .sleep_temp_c = 100u,
-            .tip_deci_c = 245,
+            .tip_deci_c = 1002,
             .rail_mv = 22940u,
-            .cur_ma = 0,
-            .cur_peak_ma = 0,
+            .cur_ma = 1450,
+            .cur_peak_ma = 7200,
             .cur_zero_mv = 1642u,
-            .duty_ticks = 0u,
-            .duty_pct = 0u,
-            .tip_raw = 180u,
-            .cur_raw = 2038u,
+            .duty_ticks = 11u,
+            .duty_pct = 12u,
+            .tip_raw = 720u,
+            .cur_raw = 2130u,
             .aux_raw = 1779u
         },
         .presets_c = { 200u, 300u, 350u },
@@ -78,9 +78,10 @@ int main(void) {
         .stream_enabled = 0u,
         .stream_interval_ms = 100u,
         .backlight_pct = 80u,
-        .led_mask = 0x00u,
+        .led_mask = 0x01u,
         .uptime_ms = 12000u
     };
+    settings_defaults(&ui_st.settings);
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
     snprintf(path, sizeof(path), "%s/01_standby_f245.ppm", SCREEN_PREVIEW_DIR);
@@ -129,6 +130,7 @@ int main(void) {
         .led_mask = 0x3Fu,
         .uptime_ms = 185000u
     };
+    settings_defaults(&ui_st.settings);
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
     snprintf(path, sizeof(path), "%s/02_heating_f245.ppm", SCREEN_PREVIEW_DIR);
@@ -177,6 +179,7 @@ int main(void) {
         .led_mask = 0xAAu,
         .uptime_ms = 60000u
     };
+    settings_defaults(&ui_st.settings);
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
     snprintf(path, sizeof(path), "%s/03_fault_protection.ppm", SCREEN_PREVIEW_DIR);

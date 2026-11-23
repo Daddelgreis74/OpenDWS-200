@@ -58,25 +58,53 @@ int main(void) {
     assert((c.fault_mask & FAULT_OVERVOLT) != 0u);
     assert(heater_ctrl_set_enable(&c, 1u) == HEATER_CMD_ERR_OVERVOLT);
 
-    /* Normal 22.9 V rail (1780 raw) clears rail faults, stays DISARMED in stand */
+    /* Normal 22.9 V rail (1780 raw) clears rail faults, auto-arms into 100 C Standby preheat in stand */
     heater_ctrl_update_rail(&c, 1780u);
     assert((c.fault_mask & (FAULT_UNDERVOLT | FAULT_OVERVOLT)) == 0u);
     assert(c.armed == 0u);
     for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS; ++i) {
         assert(heater_ctrl_step_10ms(&c, 200u, 1u, 0u) == 0u);
     }
-    assert(heater_ctrl_step_10ms(&c, 200u, 1u, 0u) == 0u);
+    uint8_t duty = heater_ctrl_step_10ms(&c, 200u, 1u, 0u);
     assert((c.fault_mask & FAULT_SETTLING) == 0u);
-
-    /* 2. Lifting iron out of stand (PB5: 0 -> 1 for 80 ms) auto-wakes with 5-tick probe pulse! */
-    for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS - 1u; ++i) {
-        assert(heater_ctrl_step_10ms(&c, 200u, 1u, 1u) == 0u);
-    }
-    uint8_t duty = heater_ctrl_step_10ms(&c, 200u, 1u, 1u);
     assert(c.armed == 1u);
-    assert(c.in_stand == 0u);
     assert(duty == PROBE_PULSE_TICKS);
     assert(c.state == HEATER_PROBE);
+    assert(heater_ctrl_check_pulse_current(&c, 2539u) == 0);
+
+    /* Next cycle in stand enters HEATER_SLEEP preheating toward 100 C */
+    duty = heater_ctrl_step_10ms(&c, 200u, 1u, 0u);
+    assert(c.state == HEATER_SLEEP);
+    assert(c.active_target_c == 100u);
+    assert(duty > 0u);
+
+    /* 2. Lifting iron out of stand (PB5: 0 -> 1 for 80 ms) switches from 100 C Standby to 300 C Heating! */
+    for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS - 1u; ++i) {
+        (void)heater_ctrl_step_10ms(&c, 200u, 1u, 1u);
+        assert(c.in_stand == 1u);
+    }
+    duty = heater_ctrl_step_10ms(&c, 200u, 1u, 1u);
+    assert(c.armed == 1u);
+    assert(c.in_stand == 0u);
+    assert(c.state == HEATER_HEATING);
+    assert(c.active_target_c == 300u);
+    assert(duty > 0u);
+
+    /* Manual disarm in stand still wakes with 5-tick probe pulse when lifted */
+    heater_ctrl_t lift_wake;
+    heater_ctrl_init(&lift_wake, 1u, 0u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_update_rail(&lift_wake, 1780u);
+    for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS; ++i) {
+        (void)heater_ctrl_step_10ms(&lift_wake, 200u, 1u, 0u);
+    }
+    assert(heater_ctrl_set_enable(&lift_wake, 0u) == HEATER_CMD_OK);
+    assert(heater_ctrl_step_10ms(&lift_wake, 200u, 1u, 0u) == 0u);
+    assert(lift_wake.armed == 0u);
+    for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS - 1u; ++i) {
+        assert(heater_ctrl_step_10ms(&lift_wake, 200u, 1u, 1u) == 0u);
+    }
+    assert(heater_ctrl_step_10ms(&lift_wake, 200u, 1u, 1u) == PROBE_PULSE_TICKS);
+    assert(lift_wake.armed == 1u && lift_wake.state == HEATER_PROBE);
 
     /* Healthy current (~6.0 A = 1650 + 396 = 2046 mV -> ~2539 raw) passes 364 us check */
     assert(heater_ctrl_check_pulse_current(&c, 2539u) == 0);
@@ -228,6 +256,19 @@ int main(void) {
     st.active_target_c = 350u;
     st.tip_deci_c = 3475;
     assert(heater_ready_notify_step(&rn, &st) == 1u);
+
+    /* 12. Repeating open-tip warning beep */
+    heater_open_tip_alarm_t ota;
+    heater_open_tip_alarm_init(&ota);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_NONE, 100u) == 0u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 200u) == 1u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 1699u) == 0u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 1700u) == 1u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 3199u) == 0u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 3200u) == 1u);
+    /* Inserting tip resets alarm; removing later beeps immediately again */
+    assert(heater_open_tip_alarm_step(&ota, FAULT_NONE, 3300u) == 0u);
+    assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 3400u) == 1u);
 
     printf("test_heater: PASS\n");
     return 0;

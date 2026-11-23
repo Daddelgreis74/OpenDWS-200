@@ -1,5 +1,5 @@
 PROJECT := opendws200
-VERSION ?= v0.2.4-phase2
+VERSION ?= v0.2.5-phase2
 BUILD := build
 DIST := dist
 OUT_BIN := $(DIST)/APP_DWS_200_OpenDWS-$(VERSION).bin

@@ -398,6 +398,8 @@ int main(void) {
     soft_power_init(&soft_pwr);
     heater_ready_notify_t ready_notify;
     heater_ready_notify_init(&ready_notify);
+    heater_open_tip_alarm_t open_tip_alarm;
+    heater_open_tip_alarm_init(&open_tip_alarm);
     heater_state_t prev_heater_state = app.hst.state;
 
     uint32_t last_sample_ms = ui_st.uptime_ms;
@@ -536,6 +538,9 @@ int main(void) {
         }
         if (heater_ready_notify_step(&ready_notify, &app.hst) != 0u) {
             app_beep(&app, 100u);
+        }
+        if (heater_open_tip_alarm_step(&open_tip_alarm, app.hst.fault_mask, now) != 0u) {
+            app_beep(&app, 120u);
         }
         prev_heater_state = app.hst.state;
 

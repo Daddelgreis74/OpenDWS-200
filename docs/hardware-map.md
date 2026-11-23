@@ -48,7 +48,7 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Öffnet und schließt das **On-Screen-Einstellungsmenü** (Sleep `100 °C`, Presets, Kalibrierung, Backlight, Buzzer, Stream, Save) |
 | `PB0` | Soft-Power-Taster | Input Pull-Up | Momentan-Taster (`HIGH→LOW→HIGH` beim Loslassen speichert geänderte Settings und zieht `PB1 = LOW`) |
 | `PB1` | Soft-Power-Latch | Output Push-Pull `HIGH` | Hält System aktiv (`HIGH` ab Reset); wird beim Ausschalten über Power-Taster auf `LOW` geschaltet |
-| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | `LOW` = im Ständer (`SLEEP` `100 °C` / `0 W`), `HIGH` = entnommen (**automatisches Aufwecken/Heizen** ohne Tastendruck; beim Boot außerhalb des Ständers sicher im `STANDBY`) |
+| `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | `LOW` = im Ständer (**Standby-Bildschirm + Vorheizen auf `100 °C`**), `HIGH` = entnommen (**automatisches Heizen auf Sollwert** ohne Tastendruck; beim Boot außerhalb des Ständers sicher aus) |
 | `PB2` | Diag-Eingang | Input Pull-Down | Live-Monitoring |
 | `PB10, PB11` | Bit-Bang `I2C` | Output / Open-Drain | Nebenbus für Slave-Adresse `0x78` (optionales Power-/Display-IC) |
 | `PF4, PF5` | Front-LEDs 0..1 | Output Push-Pull | Status-LEDs |
