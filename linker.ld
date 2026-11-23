@@ -17,7 +17,13 @@ SECTIONS
   {
     *(.text.Reset_Handler)
     *(.text*)
+  } > FLASH
+
+  .rodata :
+  {
+    . = ALIGN(4);
     *(.rodata*)
+    . = ALIGN(4);
   } > FLASH
 
   /DISCARD/ :
