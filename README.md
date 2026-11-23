@@ -6,17 +6,50 @@
 Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-W-Präzisionslötstation (MCU: Artery `AT32F415RCT7`, ARM Cortex-M4 ohne FPU, `144 MHz`).
 
 > [!IMPORTANT]
-> **Phase 2 — Geschlossene PID-Regelung, Auto-Off-Timer & Soft-Power (`v0.2.7-phase2`)**
-> Nach dem Einschalten fährt die Station (sofern der Kolben im Ständer ruht und eine Spitze steckt) automatisch in den **Standby-Bildschirm (`100 °C` Vorheizen)** und wartet auf die Entnahme des Kolbens (`PB5`). Fehlt die Spitze (`PC0 > 4000`), erscheint automatisch die grafische **`NO TIP! / KEINE SPITZE!`**-Warnung mit wiederkehrendem Signalton (`1,5 s`), und Heizen bleibt strikt gesperrt. Der **Power-Button (`PB0`/`PB1`)** speichert geänderte Settings und schaltet sauber ab.
+> **Phase 2 — Geschlossene PID-Regelung, Auto-Off-Timer & flimmerfreie UI (`v0.2.7-phase2`)**
+> Nach dem Einschalten fährt die Station (sofern der Kolben im Ständer ruht und eine Spitze steckt) automatisch in den ruhigen **Vollbild-Standby (`100 °C` Vorheizen + Auto-Off-Countdown)** und wartet auf die Entnahme des Kolbens (`PB5`). Fehlt die Spitze (`PC0 > 4000`), erscheint automatisch die grafische **`NO TIP! / KEINE SPITZE!`**-Warnung mit wiederkehrendem Signalton (`1,5 s`), und Heizen bleibt strikt gesperrt. Der **Power-Button (`PB0`/`PB1`)** speichert geänderte Settings und schaltet sauber ab.
 
 ---
 
-## 🌟 Features (Phase 2)
+## 📸 UI-Vorschau (Screenshots)
 
-- **⚡ Originalgetreuer Auto-Ständer (`PB5`), Standby-Vorheizen & No-Tip-Alarm:**
-  - Start im Ständer (`PB5 = LOW`) heizt nach dem `455-µs`-Prüfpuls automatisch auf Standby-Temperatur (`100 °C` Standard) vor und zeigt den Standby-Schirm bis zum Entnehmen des Kolbens (`PB5: LOW→HIGH`). Liegt der Kolben beim Einschalten bereits außerhalb des Ständers, bleibt die Heizung aus Sicherheitsgründen aus (`PLACE IRON IN STAND FIRST`).
-  - Bei fehlender Spitze (`FAULT_OPEN_TIP`) erscheint ein eigener roter Grafik-Warnbildschirm (`NO TIP! / KEINE SPITZE!`) mit alle `1,5 s` wiederkehrendem Alarmton, bis eine Spitze eingesteckt wird.
-  - Power-Button (`PB0`) speichert geänderte Settings im Flash `0x0803F800` und schaltet über `PB1 = LOW` hart ab.
+| Vollbild-Standby (`100 °C` & Auto-Off) | Aktives Heizen (`F245 PID`) |
+| :---: | :---: |
+| ![Standby-Bildschirm](docs/screenshots/01_standby_f245.png) | ![Aktives Heizen](docs/screenshots/02_heating_f245.png) |
+
+| Temperatur- & Leistungsdiagramm (`GRAPH`) | On-Screen-Einstellungsmenü (`PB4`) |
+| :---: | :---: |
+| ![Temperatur- und Leistungsdiagramm](docs/screenshots/05_graph_temp_power.png) | ![Einstellungsmenü](docs/screenshots/04_settings_menu.png) |
+
+| Grafische `NO TIP!`-Warnung + Alarmton | |
+| :---: | :---: |
+| ![NO TIP Warnbildschirm](docs/screenshots/03_fault_protection.png) | |
+
+---
+
+## 🌟 Features (`v0.2.7-phase2`)
+
+- **⚡ Originalgetreuer Auto-Ständer (`PB5`), Standby-Schirm & Auto-Off-Schutz:**
+  - **Boot-Standby & Vorheizen:** Start im Ständer (`PB5 = LOW`) heizt nach dem `455-µs`-Prüfpuls auf `100 °C` vor und zeigt den ruhigen Vollbild-Standby-Schirm (`Standby Screen` im Menü abschaltbar). Entnahme aus dem Ständer (`PB5: LOW→HIGH`) startet automatisch die volle Solltemperatur; Boot außerhalb des Ständers bleibt sicher auf `0 W`.
+  - **Konfigurierbarer Auto-Off-Timer (`OFF`, `5 / 10 / 15 / 30 / 60 min`, Standard `10 min`):** Schaltet die Spitze nach längerer Ruhe im Ständer komplett stromlos (`0 W`) mit Live-Countdown und Signalton, um Spitzenoxidation zu minimieren. Beim Herausnehmen aus dem Ständer heizt sie sofort wieder auf.
+  - **`READY`-Signalton (`100 ms`):** Ertönt einmalig beim Erreichen der Solltemperatur (`±3,0 °C`), ohne beim Löten erneut zu piepen (respektiert `Buzzer: ON/OFF`).
+  - **Grafischer `NO TIP! / KEINE SPITZE!`-Warnbildschirm:** Erscheint automatisch bei fehlender Spitze (`FAULT_OPEN_TIP`, `PC0 > 4000`) mit alle `1,5 s` wiederkehrendem Signalton.
+  - **Soft-Power-Latch (`PB0`/`PB1`):** Speichert geänderte Einstellungen automatisch im Flash (`0x0803F800`) und schaltet über `PB1 = LOW` sauber ab.
+
+- **🖥️ Flimmerfreie Aurora-Dark Löt-UI (`320 × 240`, ST7789V) & Diagramm-Ansicht:**
+  - **Flimmerfreie Darstellung:** Single-Pass-Streifenpuffer (`gfx_draw_badge` / Sparkline / Dual-Graph) mit `10 Hz`-Refresh ohne sichtbares Löschen/Neuzeichen.
+  - **Duales Temperatur- & Leistungsdiagramm (`GRAPH`):** Per `MODE/OK` (`PD2`) umschaltbar — zeigt live Temperaturverlauf (`0..480 °C`), Leistung (`0..100 %`) und Sollwert-Linie (`-- SET`).
+  - **On-Screen-Einstellungsmenü (`PB4`):** Sleep Temp (`OFF` / `50–250 °C`, Standard `100 °C`), Auto Stand `ON/OFF`, **Standby Screen `ON/OFF`**, **Auto Off (`OFF` / `5–60 min`, Standard `10 min`)**, Presets `CH1..3`, Spitzenkalibrierung (`Cal F245/F210`), Backlight (`10–100 %`), Buzzer `ON/OFF`, USB Stream `ON/OFF` und `Save to Flash`.
+
+### Tastenbelegung (v. l. n. r.)
+
+| Taste | Pin | Haupt- / Standby-Ansicht | Im Einstellungsmenü (`PB4`) |
+| :--- | :--- | :--- | :--- |
+| Links (`CH / CLR`) | `PC11` | Presets `200 / 300 / 350 °C` wechseln bzw. Fault löschen | Schritt zurück / Bearbeiten beenden |
+| 2. v. l. (`<`) | `PC12` | Sollwert `-5 °C` (Langdruck `-25 °C`) | Hoch scrollen / Wert `-` |
+| Mitte (`MODE / OK`) | `PD2` | **Kurz:** Hauptansicht ↔ `GRAPH`-Diagramm<br>**Lang:** Flash speichern (schaltet Heizung **nicht**) | Punkt wählen / Option mit **`OK`** umschalten |
+| 4. v. l. (`>`) | `PB3` | Sollwert `+5 °C` (Langdruck `+25 °C`) | Runter scrollen / Wert `+` |
+| Rechts (`MENU`) | `PB4` | Einstellungsmenü öffnen | Einstellungsmenü schließen |
 
 - **🔥 `100 Hz` Blanking & `91 µs` PID-Regelung (`TMR1` + `TMR2`):**
   - Verifiziertes DC-Blanking aus `APP_DWS_200_V1.5`: `1,0 ms` nach `PA2 = LOW` misst `PC0` die Thermospannung ohne Heizstrom-Störung (`alpha = 0,2` EMA).
@@ -26,9 +59,6 @@ Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-
 - **🛡️ Mehrschichtige Sicherheitsarchitektur:**
   - `364 µs` Sofort-Überstromabschaltung im `TMR2`-Interrupt + `455 µs` Prüfpuls bei Erststart und Spitzenwechsel.
   - `24-V`-Schienenüberwachung (`PA3 × 16`), Open-Tip (`> 4000 raw`), `30 s`-Dauerüberlast (`> 5 A`), `480 °C`-Hartlimit, *Thermal Runaway Protection* (`8 s`) und Hardware-Watchdog (`2 s`).
-- **🖥️ Aurora-Dark Löt-UI (`320 × 240`, ST7789V) & 5-Tasten-Steuerung:**
-  - Hauptschirm (v. links nach rechts): `CH/CLR` (`PC11`: Presets `200/300/350 °C` / Fault löschen) | `-5 °C` (`PC12`) | `MODE/OK` (`PD2`: kurz zwischen Hauptansicht & Temperatur-/Leistungs-Diagramm `GRAPH` wechseln, lang in Flash `0x0803F800` speichern; im Menü: Eingaben mit `OK` bestätigen) | `+5 °C` (`PB3`) | `MENU` (`PB4`: Einstellungsmenü öffnen).
-  - **On-Screen-Einstellungsmenü (`PB4`):** Sleep-Temp (`50–250 °C`, Standard `100 °C`), Sleep-Ständer `ON/OFF`, **Standby Screen `ON/OFF`**, **Auto Off (`OFF` / `5–60 min`, Standard `10 min` Spitzen-Schutz)**, Presets `CH1..3`, Spitzenkalibrierung je Griff, Backlight `10–100 %`, Buzzer `ON/OFF`, USB-Stream `ON/OFF` und `Save to Flash`.
 - **🔌 USB-CDC Live-Telemetrie & Fernsteuerung (`VID 0x2E3C / PID 0x5740`):**
   - Vollständiges ASCII-Protokoll (`HELP`, `INFO`, `STAT`, `HEAT`, `TEMP`, `PRESET`, `SLEEP`, `CAL`, `CLEAR`, `SAVE`, `STREAM`, `BL`, `BEEP`, `LED`, `REBOOT`).
 
