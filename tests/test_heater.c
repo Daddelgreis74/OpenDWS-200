@@ -62,9 +62,10 @@ int main(void) {
     heater_ctrl_update_rail(&c, 1780u);
     assert((c.fault_mask & (FAULT_UNDERVOLT | FAULT_OVERVOLT)) == 0u);
     assert(c.armed == 0u);
-    for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS; ++i) {
+    for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS - 1u; ++i) {
         assert(heater_ctrl_step_10ms(&c, 200u, 1u, 0u) == 0u);
     }
+    assert(c.settle_ticks == 0u);
     uint8_t duty = heater_ctrl_step_10ms(&c, 200u, 1u, 0u);
     assert((c.fault_mask & FAULT_SETTLING) == 0u);
     assert(c.armed == 1u);
