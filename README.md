@@ -64,6 +64,15 @@ Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-
 
 ---
 
+## 💻 PC-Software (`OpenDWS-200 Studio`)
+
+Im Ordner [`pc-app/`](pc-app/) liegt die plattformübergreifende **Electron Desktop-App (`OpenDWS-200 Studio`)** im Aurora-Dark-Design als portable Windows-`.exe` (automatisch über GitHub Actions gebaut, inkl. Live-Plotter, Fernsteuerung, CSV-Datenlogger, USB-Konsole & `BOOTLOADER`-Firmware-Updater):
+
+- **Direkter Download:** Unter [GitHub Releases (`pc-v*`)](../../releases) (`OpenDWS-200-Studio-*-win-x64-portable.exe`).
+- **Funktionen:** Live-Temperatur-/Leistungs-/Strom-Plotter, vollständige Fernsteuerung (`TEMP`, `PRESET`, `HEAT`, `SLEEP`, `CAL`, `BL`, `SAVE`), CSV-Export, Raw-USB-Konsole (`VID 0x2E3C / PID 0x5740`) sowie 1-Klick-Firmware-Updater (GitHub-Release oder lokale `.bin` direkt aufs `BOOTLOADER`-Laufwerk mit SHA-256-Prüfung).
+
+---
+
 ## 🔌 Flashen & Zurückflashen (ohne Programmer)
 
 1. Lötstation am rückseitigen Netzschalter ausschalten.

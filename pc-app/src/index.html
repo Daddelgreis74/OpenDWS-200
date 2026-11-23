@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>OpenDWS-200 Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-dot" id="connDot"></div>
+        <div>
+          <span class="brand-title">OpenDWS-200 Studio</span>
+          <span class="brand-sub" id="mcuLabel">Nicht verbunden (USB CDC VID 0x2E3C)</span>
+        </div>
+      </div>
+      <div class="top-badges">
+        <span class="badge badge-muted" id="badgeFw">FW: ---</span>
+        <span class="badge badge-muted" id="badgeHandle">HDL: ---</span>
+        <span class="badge badge-muted" id="badgeState">OFFLINE</span>
+        <span class="badge badge-ok hidden" id="badgeFault">FAULT</span>
+        <button class="btn btn-primary" id="btnConnect">Verbinden</button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Left: KPI Hero Row + Live Chart -->
+      <section class="left-col">
+        <div class="kpi-grid">
+          <div class="card kpi-card">
+            <div class="kpi-label">SPITZEN-TEMPERATUR</div>
+            <div class="kpi-value cyan" id="kpiTemp">---.- °C</div>
+            <div class="kpi-meta" id="kpiTarget">Soll: --- °C · Aktiv: --- °C</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="kpi-label">HEIZLEISTUNG</div>
+            <div class="kpi-value amber" id="kpiPower">0 %</div>
+            <div class="duty-track"><div class="duty-fill" id="dutyFill"></div></div>
+            <div class="kpi-meta" id="kpiWatts">0 W · 0 Ticks</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="kpi-label">HEIZSTROM (364 µs)</div>
+            <div class="kpi-value text" id="kpiCurrent">0.00 A</div>
+            <div class="kpi-meta" id="kpiPeak">Peak: 0.00 A · Zero: ---- mV</div>
+          </div>
+          <div class="card kpi-card">
+            <div class="kpi-label">24-V-RAIL &amp; STÄNDER</div>
+            <div class="kpi-value ok" id="kpiRail">--.- V</div>
+            <div class="kpi-meta" id="kpiStand">Ständer: --- · Fault: NONE</div>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-head">
+            <div class="chart-title-group">
+              <span class="card-title">Live-Diagramm</span>
+              <span class="legend-item"><i class="swatch cyan"></i>Temperatur (0..480 °C)</span>
+              <span class="legend-item"><i class="swatch target"></i>Solltemperatur</span>
+              <span class="legend-item"><i class="swatch amber"></i>Leistung (0..100 %)</span>
+            </div>
+            <div class="chart-controls">
+              <select id="selectWindow" class="select-sm" title="Zeitfenster">
+                <option value="60">60 s</option>
+                <option value="180" selected>180 s</option>
+                <option value="300">300 s</option>
+              </select>
+              <button class="btn btn-sm" id="btnChartPause">Pause</button>
+              <button class="btn btn-sm" id="btnChartClear">Leeren</button>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="telemetryChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Remote Control & Station Settings -->
+      <aside class="right-col">
+        <div class="card ctrl-card">
+          <div class="card-head">
+            <span class="card-title">Temperatur &amp; Heizung</span>
+            <span class="mono muted" id="ctrlTargetBadge">300 °C</span>
+          </div>
+
+          <div class="slider-row">
+            <button class="btn btn-sm" id="btnTempMinus">-5</button>
+            <input type="range" id="sliderTemp" min="100" max="450" step="5" value="300" />
+            <button class="btn btn-sm" id="btnTempPlus">+5</button>
+          </div>
+
+          <div class="btn-row-3">
+            <button class="btn btn-preset" data-preset="1">CH1 · 200°C</button>
+            <button class="btn btn-preset" data-preset="2">CH2 · 300°C</button>
+            <button class="btn btn-preset" data-preset="3">CH3 · 350°C</button>
+          </div>
+
+          <div class="btn-row-3">
+            <button class="btn btn-ok" id="btnHeatOn">HEAT ON</button>
+            <button class="btn btn-warn" id="btnHeatOff">STANDBY</button>
+            <button class="btn btn-danger" id="btnClearFault">CLEAR FAULT</button>
+          </div>
+        </div>
+
+        <div class="card ctrl-card">
+          <div class="card-head">
+            <span class="card-title">Standby &amp; Hardware</span>
+            <span class="muted">Flash <code>0x0803F800</code></span>
+          </div>
+
+          <div class="field-row">
+            <label>Auto-Ständer (<code>PB5</code>)</label>
+            <div class="inline-group">
+              <button class="btn btn-sm" id="btnSleepOn">ON</button>
+              <button class="btn btn-sm" id="btnSleepOff">OFF</button>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label for="inputSleepTemp">Sleep-Temp (<code>0</code> = 0W)</label>
+            <div class="inline-group">
+              <input type="number" id="inputSleepTemp" class="input-num" min="0" max="250" step="10" value="100" />
+              <button class="btn btn-sm" id="btnSetSleepTemp">Set</button>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label for="inputCal">Kalibrierung (°C)</label>
+            <div class="inline-group">
+              <input type="number" id="inputCal" class="input-num" min="-50" max="50" step="1" value="0" />
+              <button class="btn btn-sm" id="btnSetCal">Set</button>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label for="sliderBl">Display-Helligkeit</label>
+            <div class="inline-group wide">
+              <input type="range" id="sliderBl" min="0" max="100" step="10" value="80" />
+              <span class="mono" id="valBl">80%</span>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label for="selectStream">Stream-Intervall</label>
+            <div class="inline-group">
+              <select id="selectStream" class="select-sm">
+                <option value="50">50 ms (20 Hz)</option>
+                <option value="100" selected>100 ms (10 Hz)</option>
+                <option value="250">250 ms (4 Hz)</option>
+                <option value="500">500 ms (2 Hz)</option>
+                <option value="OFF">Stream OFF</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btn-row-4">
+            <button class="btn btn-sm" id="btnBeep">BEEP</button>
+            <button class="btn btn-sm" id="btnLedAuto">LED AUTO</button>
+            <button class="btn btn-sm btn-primary" id="btnSaveFlash">SAVE FLASH</button>
+            <button class="btn btn-sm btn-danger" id="btnReboot">REBOOT</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom Tabbed Drawer -->
+    <footer class="card drawer-card">
+      <div class="drawer-tabs">
+        <div class="tab-buttons">
+          <button class="tab-btn active" data-tab="logger">CSV-Datenlogger</button>
+          <button class="tab-btn" data-tab="console">USB-Konsole</button>
+          <button class="tab-btn" data-tab="updater">Firmware-Updater</button>
+        </div>
+        <span class="status-toast" id="statusToast">Bereit.</span>
+      </div>
+
+      <!-- Tab: CSV Logger -->
+      <div class="tab-panel active" id="tab-logger">
+        <div class="logger-bar">
+          <div class="logger-actions">
+            <button class="btn btn-ok" id="btnLogStart">Aufzeichnung starten</button>
+            <button class="btn btn-warn" id="btnLogStop" disabled>Stoppen</button>
+            <button class="btn" id="btnLogExport" disabled>CSV exportieren...</button>
+            <button class="btn" id="btnLogClear">Puffer leeren</button>
+          </div>
+          <div class="logger-stats mono">
+            <span id="logStatusBadge" class="badge badge-muted">GESTOPPT</span>
+            <span>Samples: <strong id="logCount">0</strong></span>
+            <span>Dauer: <strong id="logElapsed">00:00</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: USB Console -->
+      <div class="tab-panel" id="tab-console">
+        <div class="console-toolbar">
+          <div class="quick-cmds">
+            <button class="btn btn-xs" data-cmd="INFO">INFO</button>
+            <button class="btn btn-xs" data-cmd="STAT">STAT</button>
+            <button class="btn btn-xs" data-cmd="HELP">HELP</button>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="chkHideStat" checked />
+            <span>STAT-Stream im Log ausblenden</span>
+          </label>
+          <button class="btn btn-xs" id="btnConsoleClear">Log leeren</button>
+        </div>
+        <div class="console-log mono" id="consoleLog"></div>
+        <form class="console-input-row" id="consoleForm">
+          <input type="text" id="consoleInput" class="input-text mono" placeholder="USB-Befehl eingeben (z. B. INFO, TEMP 320, BL 90)..." />
+          <button type="submit" class="btn btn-primary btn-sm">Senden</button>
+        </form>
+      </div>
+
+      <!-- Tab: Firmware Updater -->
+      <div class="tab-panel" id="tab-updater">
+        <div class="updater-grid">
+          <div class="updater-box">
+            <div class="updater-title">1. Bootloader-Laufwerk (<code>BOOTLOADER</code>)</div>
+            <p class="updater-desc">
+              Station ausschalten, <strong>MODE (<code>PD2</code>)</strong> gedrückt halten und per USB-C verbinden.
+              Das Laufwerk <code>BOOTLOADER</code> erscheint dann automatisch.
+            </p>
+            <div class="inline-group">
+              <span id="bootloaderStatus" class="badge badge-muted">Nicht geprüft</span>
+              <button class="btn btn-sm" id="btnDetectBootloader">Laufwerk suchen</button>
+            </div>
+          </div>
+
+          <div class="updater-box">
+            <div class="updater-title">2. GitHub Release (<code>Daddelgreis74/OpenDWS-200</code>)</div>
+            <div class="inline-group wide">
+              <input type="password" id="inputGhToken" class="input-text input-sm" placeholder="Optionales GitHub Token (nur für Private-Repo lokal gespeichert)" />
+              <button class="btn btn-sm" id="btnCheckGithub">Prüfen</button>
+            </div>
+            <div class="updater-meta mono" id="githubReleaseInfo">Noch nicht abgefragt.</div>
+            <div class="inline-group">
+              <button class="btn btn-sm btn-primary" id="btnDownloadFlash" disabled>Herunterladen &amp; Flashen</button>
+              <a href="#" id="linkGithubRelease" class="link hidden">Release im Browser öffnen</a>
+            </div>
+          </div>
+
+          <div class="updater-box">
+            <div class="updater-title">3. Lokale <code>.bin</code>-Datei flashen</div>
+            <div class="updater-meta mono" id="localBinInfo">Keine Datei ausgewählt.</div>
+            <div class="inline-group">
+              <button class="btn btn-sm" id="btnPickLocalBin">.bin wählen...</button>
+              <button class="btn btn-sm btn-ok" id="btnFlashLocalBin" disabled>Auf BOOTLOADER kopieren</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- COM Port Picker Modal -->
+  <div class="modal-backdrop hidden" id="portModal">
+    <div class="modal card">
+      <div class="card-head">
+        <span class="card-title">USB-CDC COM-Port auswählen</span>
+        <button class="btn btn-sm" id="btnCancelPort">Abbrechen</button>
+      </div>
+      <div class="port-list" id="portList"></div>
+    </div>
+  </div>
+
+  <script src="protocol.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
