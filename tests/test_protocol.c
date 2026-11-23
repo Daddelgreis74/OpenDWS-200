@@ -97,7 +97,7 @@ int main(void) {
     m.hst.is_f245 = 1u;
     m.hst.target_c = 300u;
     m.hst.active_target_c = 300u;
-    m.hst.sleep_temp_c = 150u;
+    m.hst.sleep_temp_c = 100u;
     m.hst.sleep_en = 1u;
     m.hst.tip_deci_c = 245;
     m.hst.rail_mv = 22920u;
@@ -190,9 +190,13 @@ int main(void) {
     assert(m.hst.sleep_en == 0u);
 
     reset_out(&m);
-    protocol_handle_line(&proto, "SLEEP 160", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
-    assert(strcmp(m.out, "OK SLEEP=160\r\n") == 0);
-    assert(m.hst.sleep_temp_c == 160u);
+    protocol_handle_line(&proto, "SLEEP 90", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK SLEEP=90\r\n") == 0);
+    assert(m.hst.sleep_temp_c == 90u);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "SLEEP 30", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "ERR SLEEP_RANGE_50_250\r\n") == 0);
 
     reset_out(&m);
     protocol_handle_line(&proto, "CAL -12", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);

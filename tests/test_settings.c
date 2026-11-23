@@ -11,7 +11,7 @@ int main(void) {
     assert(s.version == SETTINGS_VERSION);
     assert(s.target_c == 300u);
     assert(s.presets_c[0] == 200u && s.presets_c[1] == 300u && s.presets_c[2] == 350u);
-    assert(s.sleep_temp_c == 150u);
+    assert(s.sleep_temp_c == 100u);
     assert(s.sleep_en == 1u);
     assert(s.backlight_pct == 80u);
     assert(settings_validate(&s) == 1);

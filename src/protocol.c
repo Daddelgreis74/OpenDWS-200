@@ -274,7 +274,7 @@ void protocol_handle_line(
     if (eq_ci(cmd, "HELP") || eq_ci(cmd, "?")) {
         emit_str(ctx,
             "OK CMDS: HELP | INFO | STAT | HEAT <ON|OFF> | TEMP <100..450> | PRESET <1..3> | "
-            "SLEEP <ON|OFF|100..250> | CAL <-50..50> | CLEAR | SAVE | STREAM [ON|OFF|50..2000] | "
+            "SLEEP <ON|OFF|50..250> | CAL <-50..50> | CLEAR | SAVE | STREAM [ON|OFF|50..2000] | "
             "BL <0..100> | BEEP [10..1000] | LED <0..255|AUTO> | REBOOT\r\n");
         return;
     }
@@ -410,7 +410,7 @@ void protocol_handle_line(
         }
         uint32_t st = 0u;
         if (!parse_u32(arg, &st) || st < SLEEP_TEMP_MIN_C || st > SLEEP_TEMP_MAX_C) {
-            emit_str(ctx, "ERR SLEEP_RANGE_100_250\r\n");
+            emit_str(ctx, "ERR SLEEP_RANGE_50_250\r\n");
             return;
         }
         if (ctx->ops.set_sleep != NULL) {

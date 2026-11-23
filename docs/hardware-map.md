@@ -43,9 +43,9 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | 24-V-Rail-Monitor (`V_rail = adc_V * 16,0`; `1,434 V × 16 = 22,94 V`) |
 | `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 2: Preset-Wechsel (`CH1/2/3`) bzw. `CLEAR` bei Fault |
 | `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 2: Solltemperatur `-5 °C` (Langdruck `-25 °C`) |
-| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Phase 2: `HEAT` ↔ `STANDBY` umschalten; Langdruck speichert im Flash |
-| `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Phase 2: Solltemperatur `+5 °C` (Langdruck `+25 °C`) |
-| `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Phase 2: Backlight-Stufen `20/50/80/100 %`; Langdruck USB-Stream |
+| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Hauptschirm: `HEAT` ↔ `STANDBY` (Langdruck: Flash-Save); im Menü: Auswählen/Ändern/Speichern |
+| `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Hauptschirm: Sollwert `+5 °C` (Langdruck `+25 °C`); im Menü: Runter / Wert `+` |
+| `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Öffnet und schließt das **On-Screen-Einstellungsmenü** (Sleep `100 °C`, Presets, Kalibrierung, Backlight, Buzzer, Stream, Save) |
 | `PB5` | Sleep-Ablage | Input Pull-Down + `EXINT5` | Interrupt auf steigende/fallende Flanke (`LOW` = im Ständer, `HIGH` = entnommen) |
 | `PB6` | Griff-Erkennung | Input Pull-Up | **Verifiziert:** `HIGH` (`1`) = **`F245`**, `LOW` (`0`) = **`F210`** |
 | `PC13, PC14, PC15` | Griff-Mux / Gain-Steuerung | Output Push-Pull | Analogbereich-Umschaltung via Backup-Domain-Unlock (`F245`: `PC14=1, PC13/15=0`; `F210`: `PC14=0, PC13/15=1`) |

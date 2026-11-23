@@ -21,6 +21,8 @@
 #define COL_RED_DARK    RGB565(69, 20, 26)
 #define COL_SPARK_BG    RGB565(13, 20, 33)
 
+static uint8_t g_rendered_menu_mode = 0u;
+
 static size_t append_fixed_1(char *buf, size_t pos, size_t cap, int32_t deci, uint8_t whole_w) {
     if (deci < 0) deci = 0;
     uint32_t whole = (uint32_t)deci / 10u;
@@ -103,6 +105,7 @@ static void pick_state_style(
 }
 
 void ui_draw_static(void) {
+    g_rendered_menu_mode = 0u;
     gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
 
     /* Top header bar */
@@ -127,8 +130,173 @@ void ui_draw_static(void) {
     gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
 }
 
+static void ui_draw_menu_static(void) {
+    g_rendered_menu_mode = 1u;
+    gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
+
+    /* Top header bar */
+    gfx_fill_rect(0u, 0u, LCD_WIDTH, 25u, COL_CARD);
+    gfx_draw_hline(0u, 25u, LCD_WIDTH, COL_BORDER);
+    gfx_draw_text(6u, 9u, "SETTINGS", COL_CYAN, COL_CARD, 1u);
+
+    /* Settings list card */
+    gfx_fill_rect(6u, 30u, 308u, 178u, COL_CARD);
+    gfx_draw_rect(6u, 30u, 308u, 178u, COL_BORDER);
+
+    /* Bottom 5-button bar */
+    gfx_draw_hline(0u, 213u, LCD_WIDTH, COL_BORDER);
+    gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
+}
+
+static void draw_padded_16(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg) {
+    char buf[17];
+    size_t i = 0u;
+    if (s != NULL) {
+        while (s[i] != '\0' && i < 16u) {
+            buf[i] = s[i];
+            i++;
+        }
+    }
+    while (i < 16u) {
+        buf[i++] = ' ';
+    }
+    buf[16] = '\0';
+    gfx_draw_text(x, y, buf, fg, bg, 1u);
+}
+
+static void draw_padded_18_right(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg) {
+    char buf[19];
+    size_t len = 0u;
+    if (s != NULL) {
+        while (s[len] != '\0' && len < 18u) {
+            len++;
+        }
+    }
+    size_t pad = 18u - len;
+    for (size_t i = 0u; i < pad; ++i) {
+        buf[i] = ' ';
+    }
+    for (size_t i = 0u; i < len; ++i) {
+        buf[pad + i] = s[i];
+    }
+    buf[18] = '\0';
+    gfx_draw_text(x, y, buf, fg, bg, 1u);
+}
+
+static void ui_draw_menu_dynamic(const input_state_t *inp, const ui_status_t *st) {
+    const heater_status_t *h = &st->hst;
+    char line[32];
+    char num[16];
+
+    /* Top header live temp/state badge + scroll counter + handle */
+    const char *st_label;
+    uint16_t st_fg, st_bg, st_bd;
+    pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
+    if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
+        gfx_draw_badge(62u, 4u, 112u, 18u, "OPEN! NO TIP", COL_RED, COL_RED_DARK, COL_RED);
+    } else {
+        size_t p = 0u;
+        p = append_fixed_1(line, p, sizeof(line), h->tip_deci_c, 3u);
+        p = fmt_append_str(line, p, sizeof(line), "C ");
+        (void)fmt_append_str(line, p, sizeof(line), st_label);
+        gfx_draw_badge(62u, 4u, 112u, 18u, line, st_fg, st_bg, st_bd);
+    }
+
+    size_t cp = 0u;
+    fmt_uint_pad(num, sizeof(num), (uint32_t)(st->menu.cursor + 1u), 2u, ' ');
+    cp = fmt_append_str(line, cp, sizeof(line), num);
+    cp = fmt_append_str(line, cp, sizeof(line), "/");
+    fmt_uint_pad(num, sizeof(num), MENU_ITEM_COUNT, 2u, '0');
+    (void)fmt_append_str(line, cp, sizeof(line), num);
+    gfx_draw_text(184u, 9u, line, COL_MUTED, COL_CARD, 1u);
+
+    gfx_draw_badge(
+        246u, 4u, 68u, 18u,
+        h->is_f245 ? "HDL:F245" : "HDL:F210",
+        h->is_f245 ? COL_CYAN : COL_AMBER,
+        h->is_f245 ? COL_CYAN_DARK : COL_AMBER_DARK,
+        h->is_f245 ? COL_CYAN : COL_AMBER
+    );
+
+    /* Visible 6 settings rows */
+    for (uint32_t r = 0u; r < MENU_VISIBLE_ROWS; ++r) {
+        uint8_t idx = (uint8_t)(st->menu.scroll_top + r);
+        uint16_t row_y = (uint16_t)(35u + r * 28u);
+        if (idx >= MENU_ITEM_COUNT) {
+            gfx_fill_rect(12u, row_y, 296u, 24u, COL_CARD);
+            continue;
+        }
+
+        uint8_t selected = (idx == st->menu.cursor) ? 1u : 0u;
+        uint8_t editing = (selected && st->menu.editing) ? 1u : 0u;
+        uint16_t fg_lbl = selected ? COL_TEXT : COL_MUTED;
+        uint16_t fg_val = editing ? COL_AMBER : (selected ? COL_CYAN : COL_TEXT);
+        uint16_t bg = editing ? COL_AMBER_DARK : (selected ? COL_CYAN_DARK : COL_BG);
+        uint16_t bd = editing ? COL_AMBER : (selected ? COL_CYAN : COL_BORDER);
+
+        if ((menu_item_t)idx == MENU_ITEM_SAVE && st->save_toast_active) {
+            fg_val = COL_EMERALD;
+        }
+
+        char raw_val[24];
+        menu_format_value((menu_item_t)idx, &st->settings, h->is_f245, st->save_toast_active, raw_val, sizeof(raw_val));
+        char disp_val[24];
+        if (editing != 0u) {
+            size_t vp = fmt_append_str(disp_val, 0u, sizeof(disp_val), "< ");
+            vp = fmt_append_str(disp_val, vp, sizeof(disp_val), raw_val);
+            (void)fmt_append_str(disp_val, vp, sizeof(disp_val), " >");
+        } else {
+            (void)fmt_append_str(disp_val, 0u, sizeof(disp_val), raw_val);
+        }
+
+        gfx_draw_rect(12u, row_y, 296u, 24u, bd);
+        gfx_fill_rect(13u, (uint16_t)(row_y + 1u), 294u, 7u, bg);
+        gfx_fill_rect(13u, (uint16_t)(row_y + 8u), 7u, 7u, bg);
+        draw_padded_16(20u, (uint16_t)(row_y + 8u), menu_item_label((menu_item_t)idx, h->is_f245), fg_lbl, bg);
+        gfx_fill_rect(116u, (uint16_t)(row_y + 8u), 70u, 7u, bg);
+        draw_padded_18_right(186u, (uint16_t)(row_y + 8u), disp_val, fg_val, bg);
+        gfx_fill_rect(294u, (uint16_t)(row_y + 8u), 13u, 7u, bg);
+        gfx_fill_rect(13u, (uint16_t)(row_y + 15u), 294u, 8u, bg);
+    }
+
+    /* Bottom 5-button navigation hints */
+    static const uint16_t btn_x[5] = { 4u, 67u, 130u, 195u, 258u };
+    static const uint16_t btn_w[5] = { 58u, 58u, 60u, 58u, 58u };
+    static const uint8_t  btn_bit[5] = { KEY_BIT_PC11, KEY_BIT_PC12, KEY_BIT_PD2, KEY_BIT_PB3, KEY_BIT_PB4 };
+    const char *lbl_browse[5] = { "BACK", "UP", "OK", "DOWN", "EXIT" };
+    const char *lbl_edit[5]   = { "DONE", "-",  "OK", "+",    "EXIT" };
+    const char *const *lbls = st->menu.editing ? lbl_edit : lbl_browse;
+
+    for (uint32_t i = 0u; i < 5u; ++i) {
+        uint8_t held = (inp->held_mask & btn_bit[i]) != 0u;
+        uint16_t fg = held ? COL_CYAN : COL_TEXT;
+        uint16_t bg = held ? COL_CYAN_DARK : COL_CARD;
+        uint16_t bd = held ? COL_CYAN : COL_BORDER;
+        if (!held && i == 2u) {
+            fg = st->menu.editing ? COL_AMBER : COL_EMERALD;
+            bg = st->menu.editing ? COL_AMBER_DARK : COL_GREEN_DARK;
+            bd = fg;
+        }
+        gfx_draw_badge(btn_x[i], 216u, btn_w[i], 20u, lbls[i], fg, bg, bd);
+    }
+}
+
 void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, const ui_status_t *st) {
     if (snap == NULL || inp == NULL || st == NULL) return;
+
+    uint8_t want_menu = st->menu.open ? 1u : 0u;
+    if (want_menu != g_rendered_menu_mode) {
+        if (want_menu != 0u) {
+            ui_draw_menu_static();
+        } else {
+            ui_draw_static();
+        }
+    }
+
+    if (want_menu != 0u) {
+        ui_draw_menu_dynamic(inp, st);
+        return;
+    }
 
     const heater_status_t *h = &st->hst;
     char line[64];

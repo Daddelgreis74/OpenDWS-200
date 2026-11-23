@@ -18,7 +18,7 @@ Im laufenden Betrieb meldet sich OpenDWS-200 am USB-C-Port als **USB CDC-ACM (Vi
 | `HEAT <ON\|OFF\|1\|0>` | Heizung aktivieren / in `STANDBY` setzen (verweigert bei `NO_24V_RAIL` oder aktivem Fault) | `OK HEAT=ON` oder `ERR NO_24V_RAIL` |
 | `TEMP <100..450>` | Solltemperatur in °C setzen (`SET <t>` als Alias) | `OK TEMP=320` |
 | `PRESET <1..3>` | Preset CH1 (`200`), CH2 (`300`) oder CH3 (`350`) laden | `OK PRESET=2 TEMP=300` |
-| `SLEEP <ON\|OFF\|100..250>` | Sleep-Ständer aktivieren/deaktivieren oder Sleep-Temp setzen | `OK SLEEP=ON` / `OK SLEEP=150` |
+| `SLEEP <ON\|OFF\|50..250>` | Sleep-Ständer aktivieren/deaktivieren oder Sleep-Temp setzen (Standard `100 °C`) | `OK SLEEP=ON` / `OK SLEEP=100` |
 | `CAL <-50..50>` | Temperatur-Offset in °C für den aktuell erkannten Griff setzen | `OK CAL=2` |
 | `CLEAR` | Gelatchte Faults (`OVERCUR`, `OVERLOAD`, `OVERTEMP`, `RUNAWAY`) zurücksetzen | `OK CLEAR` |
 | `SAVE` | Aktuelle Settings sicher (inkl. `PA2=LOW`-Pause) im Flash `0x0803F800` speichern | `OK SAVE` |

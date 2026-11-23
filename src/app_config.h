@@ -2,7 +2,7 @@
 
 /* OpenDWS-200 Firmware Configuration (Phase 2 - Closed-Loop PID & Safety) */
 #ifndef OPENDWS_VERSION_STR
-#define OPENDWS_VERSION_STR "v0.2.0-phase2"
+#define OPENDWS_VERSION_STR "v0.2.1-phase2"
 #endif
 
 /* Phase 2: Heater enabled ONLY on explicit user command, ALWAYS boots in STANDBY (PA2 LOW). */
@@ -48,9 +48,9 @@
 #define TEMP_MAX_C              450u
 #define TEMP_DEFAULT_C          300u
 #define TEMP_HARD_CUTOFF_C      480u
-#define SLEEP_TEMP_MIN_C        100u
+#define SLEEP_TEMP_MIN_C        50u
 #define SLEEP_TEMP_MAX_C        250u
-#define SLEEP_TEMP_DEFAULT_C    150u
+#define SLEEP_TEMP_DEFAULT_C    100u
 #define CAL_OFFSET_MIN_C        (-50)
 #define CAL_OFFSET_MAX_C        50
 

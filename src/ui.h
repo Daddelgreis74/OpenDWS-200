@@ -2,12 +2,16 @@
 
 #include "heater.h"
 #include "input.h"
+#include "menu.h"
 #include "sensors.h"
+#include "settings.h"
 
 #include <stdint.h>
 
 typedef struct {
     heater_status_t hst;
+    menu_state_t menu;
+    opendws_settings_t settings;
     uint16_t presets_c[3];
     uint8_t active_preset; /* 0..2 or 0xFF if custom temp */
     int16_t cal_offset_c;

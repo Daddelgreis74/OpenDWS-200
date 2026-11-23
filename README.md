@@ -22,7 +22,8 @@ Alternative **Open-Source Bare-Metal-Firmware** für die **FNIRSI DWS-200** 200-
   - `364 µs` Sofort-Überstromabschaltung im `TMR2`-Interrupt + `455 µs` Prüfpuls bei Erststart und Spitzenwechsel.
   - `24-V`-Schienenüberwachung (`PA3 × 16`), Open-Tip (`> 4000 raw`), `30 s`-Dauerüberlast (`> 5 A`), `480 °C`-Hartlimit, *Thermal Runaway Protection* (`8 s`) und Hardware-Watchdog (`2 s`).
 - **🖥️ Aurora-Dark Löt-UI (`320 × 240`, ST7789V) & 5-Tasten-Steuerung:**
-  - Von links nach rechts: `CH/CLR` (`PC11`: Presets `200/300/350 °C` / Fault löschen) | `-5 °C` (`PC12`) | `HEAT/STOP` (`PD2`: kurz schalten, lang in Flash `0x0803F800` speichern) | `+5 °C` (`PB3`) | `MENU` (`PB4`: Backlight / USB-Stream).
+  - Hauptschirm (v. links nach rechts): `CH/CLR` (`PC11`: Presets `200/300/350 °C` / Fault löschen) | `-5 °C` (`PC12`) | `HEAT/STOP` (`PD2`: kurz schalten, lang in Flash `0x0803F800` speichern) | `+5 °C` (`PB3`) | `MENU` (`PB4`: Einstellungsmenü öffnen).
+  - **On-Screen-Einstellungsmenü (`PB4`):** Sleep-Temp (`50–250 °C`, Standard `100 °C`), Sleep-Ständer `ON/OFF`, Presets `CH1..3`, Spitzenkalibrierung je Griff, Backlight `10–100 %`, Buzzer `ON/OFF`, USB-Stream `ON/OFF` und `Save to Flash`.
 - **🔌 USB-CDC Live-Telemetrie & Fernsteuerung (`VID 0x2E3C / PID 0x5740`):**
   - Vollständiges ASCII-Protokoll (`HELP`, `INFO`, `STAT`, `HEAT`, `TEMP`, `PRESET`, `SLEEP`, `CAL`, `CLEAR`, `SAVE`, `STREAM`, `BL`, `BEEP`, `LED`, `REBOOT`).
 

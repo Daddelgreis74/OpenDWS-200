@@ -1,6 +1,8 @@
 #include "../tools/host_display.h"
 #include "input.h"
+#include "menu.h"
 #include "sensors.h"
+#include "settings.h"
 #include "ui.h"
 
 #include <stdio.h>
@@ -52,7 +54,7 @@ int main(void) {
             .fault_mask = FAULT_NONE,
             .target_c = 300u,
             .active_target_c = 300u,
-            .sleep_temp_c = 150u,
+            .sleep_temp_c = 100u,
             .tip_deci_c = 245,
             .rail_mv = 22940u,
             .cur_ma = 0,
@@ -100,7 +102,7 @@ int main(void) {
             .fault_mask = FAULT_NONE,
             .target_c = 320u,
             .active_target_c = 320u,
-            .sleep_temp_c = 150u,
+            .sleep_temp_c = 100u,
             .tip_deci_c = 3154,
             .rail_mv = 22920u,
             .cur_ma = 6450,
@@ -148,7 +150,7 @@ int main(void) {
             .fault_mask = FAULT_OPEN_TIP | FAULT_UNDERVOLT,
             .target_c = 300u,
             .active_target_c = 300u,
-            .sleep_temp_c = 150u,
+            .sleep_temp_c = 100u,
             .tip_deci_c = 4800,
             .rail_mv = 2320u,
             .cur_ma = 0,
@@ -173,6 +175,59 @@ int main(void) {
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
     snprintf(path, sizeof(path), "%s/03_fault_protection.ppm", SCREEN_PREVIEW_DIR);
+    if (host_display_write_ppm(path) != 0) return 1;
+
+    /* Screen 4: Open Settings Menu editing Sleep Temp (100 C) with live header telemetry */
+    display_init();
+    populate_sample_trace(&st, 2250u, 2410u, 1779u, 100u, 300u);
+    inp = (input_state_t){
+        .held_mask = KEY_BIT_PD2,
+        .pb5_sleep = 1u,
+        .pb6_handle = 1u,
+        .pb0_raw = 1u,
+        .pb2_raw = 0u,
+        .pb5_edges = 10u
+    };
+    ui_st = (ui_status_t){
+        .hst = {
+            .state = HEATER_HEATING,
+            .armed = 1u,
+            .is_f245 = 1u,
+            .in_stand = 0u,
+            .sleep_en = 1u,
+            .fault_mask = FAULT_NONE,
+            .target_c = 300u,
+            .active_target_c = 300u,
+            .sleep_temp_c = 100u,
+            .tip_deci_c = 2998,
+            .rail_mv = 22920u,
+            .cur_ma = 2150,
+            .cur_peak_ma = 5400,
+            .cur_zero_mv = 1642u,
+            .duty_ticks = 28u,
+            .duty_pct = 31u,
+            .tip_raw = 2250u,
+            .cur_raw = 2410u,
+            .aux_raw = 1779u
+        },
+        .presets_c = { 200u, 300u, 350u },
+        .active_preset = 1u,
+        .cal_offset_c = 0,
+        .usb_connected = 1u,
+        .stream_enabled = 0u,
+        .stream_interval_ms = 100u,
+        .backlight_pct = 80u,
+        .led_mask = 0x07u,
+        .uptime_ms = 92000u
+    };
+    settings_defaults(&ui_st.settings);
+    ui_st.menu.open = 1u;
+    ui_st.menu.cursor = MENU_ITEM_SLEEP_TEMP;
+    ui_st.menu.scroll_top = 0u;
+    ui_st.menu.editing = 1u;
+    ui_draw_static();
+    ui_draw_dynamic(&st.snap, &inp, &ui_st);
+    snprintf(path, sizeof(path), "%s/04_settings_menu.ppm", SCREEN_PREVIEW_DIR);
     if (host_display_write_ppm(path) != 0) return 1;
 
     return 0;

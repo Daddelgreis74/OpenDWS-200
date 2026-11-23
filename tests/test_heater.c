@@ -29,9 +29,9 @@ static uint16_t f245_dc_to_adc(int32_t dc) {
 int main(void) {
     heater_ctrl_t c;
 
-    /* 1. Boot-safe Standby & F245 initialization */
+    /* 1. Boot-safe Standby & F245 initialization (100 C default sleep) */
     g_mux_calls = 0u;
-    heater_ctrl_init(&c, 1u, 300u, 150u, 1u, 0, 0, mock_mux);
+    heater_ctrl_init(&c, 1u, 300u, 100u, 1u, 0, 0, mock_mux);
     assert(c.armed == 0u);
     assert(c.state == HEATER_STANDBY);
     assert(c.is_f245 == 1u);
@@ -82,13 +82,13 @@ int main(void) {
     }
     assert(plant_dc >= 2850 && plant_dc <= 3150);
 
-    /* 4. Sleep stand debounce (PB5=0 -> in stand -> active_target = 150 C) */
+    /* 4. Sleep stand debounce (PB5=0 -> in stand -> active_target = 100 C) */
     for (uint32_t i = 0u; i < STAND_IN_DEBOUNCE_TICKS; ++i) {
         (void)heater_ctrl_step_10ms(&c, f245_dc_to_adc(plant_dc), 1u, 0u);
     }
     assert(c.in_stand == 1u);
     assert(c.state == HEATER_SLEEP);
-    assert(c.active_target_c == 150u);
+    assert(c.active_target_c == 100u);
 
     /* Lifted out of stand (PB5=1 for 80 ms) -> resumes 300 C heating */
     for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS; ++i) {

@@ -35,7 +35,7 @@ int main(void) {
             .fault_mask = FAULT_OVERCURRENT,
             .target_c = 300u,
             .active_target_c = 300u,
-            .sleep_temp_c = 150u,
+            .sleep_temp_c = 100u,
             .tip_deci_c = 3120,
             .rail_mv = 22920u,
             .cur_ma = 0,
@@ -57,6 +57,8 @@ int main(void) {
         .led_mask = 0xAAu,
         .uptime_ms = 65000u
     };
+    settings_defaults(&st.settings);
+    menu_init(&st.menu);
 
     ui_draw_static();
     ui_draw_dynamic(&sst.snap, &inp, &st);
@@ -77,6 +79,28 @@ int main(void) {
 
     assert(non_black == (uint32_t)LCD_WIDTH * (uint32_t)LCD_HEIGHT);
     assert(red_badge_pixels > 400u);
+
+    /* Verify interactive Settings Menu screen transition & rendering */
+    st.hst.state = HEATER_HEATING;
+    st.hst.armed = 1u;
+    st.hst.fault_mask = FAULT_NONE;
+    st.menu.open = 1u;
+    st.menu.cursor = MENU_ITEM_SLEEP_TEMP;
+    st.menu.editing = 1u;
+    ui_draw_dynamic(&sst.snap, &inp, &st);
+
+    non_black = 0u;
+    for (uint16_t y = 0u; y < LCD_HEIGHT; ++y) {
+        for (uint16_t x = 0u; x < LCD_WIDTH; ++x) {
+            if (host_display_pixel(x, y) != 0u) non_black++;
+        }
+    }
+    assert(non_black == (uint32_t)LCD_WIDTH * (uint32_t)LCD_HEIGHT);
+
+    /* Verify clean exit back to main screen */
+    st.menu.open = 0u;
+    st.menu.editing = 0u;
+    ui_draw_dynamic(&sst.snap, &inp, &st);
 
     printf("test_ui: PASS\n");
     return 0;

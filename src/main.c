@@ -3,6 +3,7 @@
 #include "display.h"
 #include "heater.h"
 #include "input.h"
+#include "menu.h"
 #include "protocol.h"
 #include "sensors.h"
 #include "settings.h"
@@ -16,11 +17,18 @@ typedef struct {
     opendws_settings_t settings;
     sensor_state_t ui_sensors;
     heater_status_t hst;
+    menu_state_t menu;
     protocol_ctx_t *proto;
     uint8_t active_preset;
     uint8_t led_override;
     uint32_t save_toast_until_ms;
 } app_ctx_t;
+
+static void app_beep(const app_ctx_t *app, uint16_t ms) {
+    if (app == NULL || app->settings.buzzer_en != 0u) {
+        board_buzzer_beep(ms);
+    }
+}
 
 static uint8_t find_preset_index(const opendws_settings_t *s, uint16_t temp_c) {
     for (uint8_t i = 0u; i < 3u; ++i) {
@@ -167,9 +175,7 @@ static int proto_save_cb(void *user) {
     int ok = settings_save_flash(&app->settings);
     if (ok != 0) {
         app->save_toast_until_ms = board_ticks_ms() + 2000u;
-        if (app->settings.buzzer_en != 0u) {
-            board_buzzer_beep(90u);
-        }
+        app_beep(app, 90u);
     }
     return ok;
 }
@@ -209,6 +215,51 @@ static void adjust_target_step(app_ctx_t *app, int16_t delta_c) {
     }
 }
 
+static void apply_menu_actions(app_ctx_t *app, uint32_t act, uint32_t now) {
+    if ((act & MENU_ACT_CHANGED_SLEEP) != 0u) {
+        (void)heater_set_sleep(app->settings.sleep_en, app->settings.sleep_temp_c, 1u);
+        heater_get_status(&app->hst);
+    }
+    if ((act & MENU_ACT_CHANGED_PRESET) != 0u) {
+        if (app->active_preset < 3u) {
+            uint16_t p_temp = app->settings.presets_c[app->active_preset];
+            if (heater_set_target(p_temp) == HEATER_CMD_OK) {
+                app->settings.target_c = p_temp;
+                heater_get_status(&app->hst);
+            }
+        } else {
+            app->active_preset = find_preset_index(&app->settings, app->hst.target_c);
+        }
+    }
+    if ((act & MENU_ACT_CHANGED_CAL) != 0u) {
+        int16_t cal_dc = app->hst.is_f245 ? app->settings.cal_f245_deci_c : app->settings.cal_f210_deci_c;
+        (void)heater_set_cal((int16_t)(cal_dc / 10));
+        heater_get_status(&app->hst);
+    }
+    if ((act & MENU_ACT_CHANGED_BL) != 0u) {
+        board_set_backlight(app->settings.backlight_pct);
+    }
+    if ((act & MENU_ACT_CHANGED_STREAM) != 0u && app->proto != NULL) {
+        app->proto->stream_enabled = app->settings.stream_enabled;
+        app->proto->last_stream_ms = now;
+    }
+    if ((act & MENU_ACT_SAVE_FLASH) != 0u) {
+        sync_settings_from_runtime(app);
+        if (settings_save_flash(&app->settings) != 0) {
+            app->save_toast_until_ms = now + 2000u;
+            app_beep(app, 100u);
+        } else {
+            board_buzzer_beep(220u);
+        }
+        return;
+    }
+    if ((act & MENU_ACT_BEEP_OK) != 0u) {
+        app_beep(app, 35u);
+    } else if ((act & MENU_ACT_BEEP_NAV) != 0u) {
+        app_beep(app, 18u);
+    }
+}
+
 int main(void) {
     board_init();
     board_heater_force_off();
@@ -219,6 +270,7 @@ int main(void) {
     app_ctx_t app;
     sensors_state_init(&app.ui_sensors);
     settings_load_safe(&app.settings);
+    menu_init(&app.menu);
     app.active_preset = find_preset_index(&app.settings, app.settings.target_c);
     app.led_override = 0u;
     app.save_toast_until_ms = 0u;
@@ -260,9 +312,7 @@ int main(void) {
     /* Start TMR1 (1 ms blanking/PID) and TMR2 (91 us pulse/OC) */
     heater_hw_start();
 
-    if (app.settings.buzzer_en != 0u) {
-        board_buzzer_beep(60u);
-    }
+    app_beep(&app, 60u);
 
     uint16_t tip_raw = 0u;
     uint16_t cur_raw = 2048u;
@@ -280,6 +330,8 @@ int main(void) {
 
     ui_status_t ui_st;
     ui_st.hst = app.hst;
+    ui_st.menu = app.menu;
+    ui_st.settings = app.settings;
     ui_st.presets_c[0] = app.settings.presets_c[0];
     ui_st.presets_c[1] = app.settings.presets_c[1];
     ui_st.presets_c[2] = app.settings.presets_c[2];
@@ -296,8 +348,8 @@ int main(void) {
 
     uint32_t last_sample_ms = ui_st.uptime_ms;
     uint32_t last_ui_ms = ui_st.uptime_ms;
+    uint8_t pd2_armed_on_main = 0u;
     uint8_t pd2_was_long = 0u;
-    uint8_t pb4_was_long = 0u;
     char cmd_buf[96];
 
     for (;;) {
@@ -309,93 +361,90 @@ int main(void) {
 
         input_poll(now, &inp);
 
-        /* Taste 1 (PC11): CH / Return -> Clear fault or cycle CH1/CH2/CH3 presets */
-        if (inp.pressed_mask & KEY_BIT_PC11) {
-            heater_get_status(&app.hst);
-            if ((app.hst.fault_mask & (uint16_t)~FAULT_SETTLING) != 0u) {
-                heater_cmd_err_t err = heater_clear_fault();
-                board_buzzer_beep((err == HEATER_CMD_OK) ? 40u : 150u);
+        if (app.menu.open != 0u) {
+            pd2_armed_on_main = 0u;
+            pd2_was_long = 0u;
+            if (inp.pressed_mask != 0u) {
+                uint32_t act = menu_handle_key(&app.menu, inp.pressed_mask, &app.settings, app.hst.is_f245);
+                apply_menu_actions(&app, act, now);
+            }
+        } else {
+            /* Taste 5 (PB4): MENU -> Open On-Screen Settings Menu immediately */
+            if (inp.pressed_mask & KEY_BIT_PB4) {
+                pd2_armed_on_main = 0u;
+                pd2_was_long = 0u;
+                sync_settings_from_runtime(&app);
+                uint32_t act = menu_handle_key(&app.menu, KEY_BIT_PB4, &app.settings, app.hst.is_f245);
+                apply_menu_actions(&app, act, now);
             } else {
-                uint8_t next_p = (app.active_preset < 2u) ? (uint8_t)(app.active_preset + 1u) : 0u;
-                uint16_t p_temp = app.settings.presets_c[next_p];
-                if (heater_set_target(p_temp) == HEATER_CMD_OK) {
-                    app.settings.target_c = p_temp;
-                    app.active_preset = next_p;
+                /* Taste 1 (PC11): CH / Return -> Clear fault or cycle CH1/CH2/CH3 presets */
+                if (inp.pressed_mask & KEY_BIT_PC11) {
+                    heater_get_status(&app.hst);
+                    if ((app.hst.fault_mask & (uint16_t)~FAULT_SETTLING) != 0u) {
+                        heater_cmd_err_t err = heater_clear_fault();
+                        app_beep(&app, (err == HEATER_CMD_OK) ? 40u : 150u);
+                    } else {
+                        uint8_t next_p = (app.active_preset < 2u) ? (uint8_t)(app.active_preset + 1u) : 0u;
+                        uint16_t p_temp = app.settings.presets_c[next_p];
+                        if (heater_set_target(p_temp) == HEATER_CMD_OK) {
+                            app.settings.target_c = p_temp;
+                            app.active_preset = next_p;
+                        }
+                        app_beep(&app, 25u);
+                    }
+                    heater_get_status(&app.hst);
                 }
-                board_buzzer_beep(25u);
-            }
-            heater_get_status(&app.hst);
-        }
 
-        /* Taste 2 (PC12): Pfeil links -> Target temp -5 C (long press: -25 C total) */
-        if (inp.pressed_mask & KEY_BIT_PC12) {
-            adjust_target_step(&app, -5);
-            board_buzzer_beep(20u);
-        }
-        if (inp.long_mask & KEY_BIT_PC12) {
-            adjust_target_step(&app, -20);
-            board_buzzer_beep(45u);
-        }
+                /* Taste 2 (PC12): Pfeil links -> Target temp -5 C (long press: -25 C total) */
+                if (inp.pressed_mask & KEY_BIT_PC12) {
+                    adjust_target_step(&app, -5);
+                    app_beep(&app, 20u);
+                }
+                if (inp.long_mask & KEY_BIT_PC12) {
+                    adjust_target_step(&app, -20);
+                    app_beep(&app, 45u);
+                }
 
-        /* Taste 3 (PD2): MODE / OK -> Short: toggle HEAT/STANDBY, Long: Save Flash */
-        if (inp.pressed_mask & KEY_BIT_PD2) {
-            pd2_was_long = 0u;
-        }
-        if (inp.long_mask & KEY_BIT_PD2) {
-            pd2_was_long = 1u;
-            sync_settings_from_runtime(&app);
-            if (settings_save_flash(&app.settings) != 0) {
-                app.save_toast_until_ms = now + 2000u;
-                board_buzzer_beep(120u);
-            } else {
-                board_buzzer_beep(250u);
-            }
-        }
-        if (inp.released_mask & KEY_BIT_PD2) {
-            if (pd2_was_long == 0u) {
-                heater_get_status(&app.hst);
-                heater_cmd_err_t err = heater_set_enable(app.hst.armed ? 0u : 1u);
-                board_buzzer_beep((err == HEATER_CMD_OK) ? 40u : 180u);
-                heater_get_status(&app.hst);
-            }
-            pd2_was_long = 0u;
-        }
+                /* Taste 3 (PD2): MODE / OK -> Short: toggle HEAT/STANDBY, Long: Save Flash */
+                if (inp.pressed_mask & KEY_BIT_PD2) {
+                    pd2_armed_on_main = 1u;
+                    pd2_was_long = 0u;
+                }
+                if (pd2_armed_on_main != 0u && (inp.long_mask & KEY_BIT_PD2) != 0u) {
+                    pd2_was_long = 1u;
+                    sync_settings_from_runtime(&app);
+                    if (settings_save_flash(&app.settings) != 0) {
+                        app.save_toast_until_ms = now + 2000u;
+                        app_beep(&app, 120u);
+                    } else {
+                        board_buzzer_beep(250u);
+                    }
+                }
+                if (inp.released_mask & KEY_BIT_PD2) {
+                    if (pd2_armed_on_main != 0u && pd2_was_long == 0u) {
+                        heater_get_status(&app.hst);
+                        heater_cmd_err_t err = heater_set_enable(app.hst.armed ? 0u : 1u);
+                        if (err == HEATER_CMD_OK) {
+                            app_beep(&app, 40u);
+                        } else {
+                            board_buzzer_beep(180u);
+                        }
+                        heater_get_status(&app.hst);
+                    }
+                    pd2_armed_on_main = 0u;
+                    pd2_was_long = 0u;
+                }
 
-        /* Taste 4 (PB3): Pfeil rechts -> Target temp +5 C (long press: +25 C total) */
-        if (inp.pressed_mask & KEY_BIT_PB3) {
-            adjust_target_step(&app, 5);
-            board_buzzer_beep(20u);
-        }
-        if (inp.long_mask & KEY_BIT_PB3) {
-            adjust_target_step(&app, 20);
-            board_buzzer_beep(45u);
-        }
-
-        /* Taste 5 (PB4): Menu -> Short: cycle Backlight, Long: toggle USB Stream */
-        if (inp.pressed_mask & KEY_BIT_PB4) {
-            pb4_was_long = 0u;
-        }
-        if (inp.long_mask & KEY_BIT_PB4) {
-            pb4_was_long = 1u;
-            proto.stream_enabled = proto.stream_enabled ? 0u : 1u;
-            proto.last_stream_ms = now;
-            app.settings.stream_enabled = proto.stream_enabled;
-            board_buzzer_beep(60u);
-        }
-        if (inp.released_mask & KEY_BIT_PB4) {
-            if (pb4_was_long == 0u) {
-                uint8_t bl = board_get_backlight();
-                uint8_t next_bl;
-                if (bl < 20u) next_bl = 20u;
-                else if (bl < 50u) next_bl = 50u;
-                else if (bl < 80u) next_bl = 80u;
-                else if (bl < 100u) next_bl = 100u;
-                else next_bl = 20u;
-                board_set_backlight(next_bl);
-                app.settings.backlight_pct = next_bl;
-                board_buzzer_beep(25u);
+                /* Taste 4 (PB3): Pfeil rechts -> Target temp +5 C (long press: +25 C total) */
+                if (inp.pressed_mask & KEY_BIT_PB3) {
+                    adjust_target_step(&app, 5);
+                    app_beep(&app, 20u);
+                }
+                if (inp.long_mask & KEY_BIT_PB3) {
+                    adjust_target_step(&app, 20);
+                    app_beep(&app, 45u);
+                }
             }
-            pb4_was_long = 0u;
         }
 
         /* Refresh filtered snapshots from ISR-captured ADC values (never contend for ADC1) */
@@ -437,6 +486,8 @@ int main(void) {
         if ((uint32_t)(now - last_ui_ms) >= UI_REFRESH_MS) {
             last_ui_ms = now;
             ui_st.hst = app.hst;
+            ui_st.menu = app.menu;
+            ui_st.settings = app.settings;
             ui_st.presets_c[0] = app.settings.presets_c[0];
             ui_st.presets_c[1] = app.settings.presets_c[1];
             ui_st.presets_c[2] = app.settings.presets_c[2];

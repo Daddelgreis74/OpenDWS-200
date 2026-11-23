@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC   0x5357444Fu /* "ODWS" */
-#define SETTINGS_VERSION 2u
+#define SETTINGS_VERSION 3u
 
 typedef struct {
     uint32_t magic;
