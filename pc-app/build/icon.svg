@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" fill="none">
+  <defs>
+    <!-- Soft outer 3D elevation drop shadow -->
+    <filter id="tileShadow" x="-15%" y="-15%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#02050b" flood-opacity="0.72" />
+    </filter>
+
+    <!-- Drop shadow of the soldering iron cast onto the dark glass screen -->
+    <filter id="ironShadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="10" dy="26" stdDeviation="18" flood-color="#010308" flood-opacity="0.85" />
+    </filter>
+
+    <!-- Cyan OLED curve glow -->
+    <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12" result="blur1" />
+      <feGaussianBlur stdDeviation="4" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Tighter cyan collar LED glow -->
+    <filter id="collarGlow" x="-60%" y="-40%" width="220%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Amber-orange heated tip glow -->
+    <filter id="amberGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="16" result="glowWide" />
+      <feGaussianBlur stdDeviation="6" result="glowTight" />
+      <feMerge>
+        <feMergeNode in="glowWide" />
+        <feMergeNode in="glowTight" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- 3D extruded metallic slab lip (side & bottom thickness) -->
+    <linearGradient id="slabExtrusion" x1="112" y1="500" x2="912" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#172030" />
+      <stop offset="14%" stop-color="#475569" />
+      <stop offset="32%" stop-color="#111827" />
+      <stop offset="50%" stop-color="#2b394f" />
+      <stop offset="72%" stop-color="#0b111c" />
+      <stop offset="88%" stop-color="#475569" />
+      <stop offset="100%" stop-color="#131b29" />
+    </linearGradient>
+
+    <!-- Top chassis anodized gunmetal gradient -->
+    <linearGradient id="chassisFace" x1="140" y1="80" x2="880" y2="870" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2b3950" />
+      <stop offset="28%" stop-color="#182234" />
+      <stop offset="72%" stop-color="#0d1320" />
+      <stop offset="100%" stop-color="#080c15" />
+    </linearGradient>
+
+    <!-- Metallic outer chamfer bevel stroke -->
+    <linearGradient id="rimBevel" x1="140" y1="75" x2="880" y2="870" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#cbd5e1" stop-opacity="0.78" />
+      <stop offset="30%" stop-color="#64748b" stop-opacity="0.48" />
+      <stop offset="75%" stop-color="#1e293b" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#64748b" stop-opacity="0.48" />
+    </linearGradient>
+
+    <!-- Recessed dark glass OLED cavity -->
+    <linearGradient id="glassBg" x1="170" y1="140" x2="850" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#040811" />
+      <stop offset="55%" stop-color="#081224" />
+      <stop offset="100%" stop-color="#050b16" />
+    </linearGradient>
+
+    <!-- Inner glass border rim (sunken edge catch-light at bottom) -->
+    <linearGradient id="glassBevel" x1="512" y1="130" x2="512" y2="825" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.95" />
+      <stop offset="65%" stop-color="#1e293b" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#64748b" stop-opacity="0.46" />
+    </linearGradient>
+
+    <!-- Cyan ambient OLED backlight behind wave -->
+    <radialGradient id="oledAmbient" cx="56%" cy="54%" r="52%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.22" />
+      <stop offset="55%" stop-color="#0284c7" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#040811" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Area fill under temperature curve -->
+    <linearGradient id="waveArea" x1="512" y1="265" x2="512" y2="710" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.34" />
+      <stop offset="65%" stop-color="#0891b2" stop-opacity="0.09" />
+      <stop offset="100%" stop-color="#0891b2" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Glass ambient amber reflection under heated tip -->
+    <radialGradient id="tipHeatBloom" cx="318" cy="654" r="215" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.46" />
+      <stop offset="30%" stop-color="#f59e0b" stop-opacity="0.24" />
+      <stop offset="65%" stop-color="#ea580c" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Smooth radial heat aura directly around nozzle in iron space -->
+    <radialGradient id="tipLocalAura" cx="-294" cy="0" r="105" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fef08a" stop-opacity="0.52" />
+      <stop offset="32%" stop-color="#f59e0b" stop-opacity="0.28" />
+      <stop offset="70%" stop-color="#ea580c" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#ea580c" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Top glossy glass reflection sweep -->
+    <linearGradient id="glossSweep" x1="220" y1="80" x2="620" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14" />
+      <stop offset="50%" stop-color="#e2e8f0" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Soldering iron grip cylindrical shading -->
+    <linearGradient id="gripCyl" x1="0" y1="-56" x2="0" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="20%" stop-color="#475569" />
+      <stop offset="35%" stop-color="#64748b" />
+      <stop offset="55%" stop-color="#172030" />
+      <stop offset="82%" stop-color="#070b13" />
+      <stop offset="100%" stop-color="#283548" />
+    </linearGradient>
+
+    <!-- Stainless chrome collar shading -->
+    <linearGradient id="chromeCyl" x1="0" y1="-46" x2="0" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#475569" />
+      <stop offset="18%" stop-color="#cbd5e1" />
+      <stop offset="32%" stop-color="#ffffff" />
+      <stop offset="48%" stop-color="#94a3b8" />
+      <stop offset="76%" stop-color="#1e293b" />
+      <stop offset="92%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
+    <!-- Cartridge shaft brushed steel -->
+    <linearGradient id="shaftCyl" x1="0" y1="-22" x2="0" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#64748b" />
+      <stop offset="22%" stop-color="#e2e8f0" />
+      <stop offset="36%" stop-color="#ffffff" />
+      <stop offset="56%" stop-color="#94a3b8" />
+      <stop offset="82%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <!-- Heat-tinted bronze transition ring near nozzle -->
+    <linearGradient id="heatTintRing" x1="-185" y1="0" x2="-125" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.75" />
+      <stop offset="55%" stop-color="#8b5cf6" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#94a3b8" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Molten glowing tip axial + radial warmth -->
+    <linearGradient id="hotTipGrad" x1="-320" y1="0" x2="-175" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="18%" stop-color="#fde047" />
+      <stop offset="48%" stop-color="#f59e0b" />
+      <stop offset="78%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <clipPath id="glassClip">
+      <rect x="166" y="132" width="692" height="692" rx="134" />
+    </clipPath>
+
+    <clipPath id="chassisClip">
+      <rect x="112" y="78" width="800" height="800" rx="176" />
+    </clipPath>
+  </defs>
+
+  <!-- 1. Extruded 3D bottom chassis slab -->
+  <g filter="url(#tileShadow)">
+    <rect x="112" y="114" width="800" height="800" rx="176" fill="url(#slabExtrusion)" />
+    <rect x="112" y="114" width="800" height="800" rx="176" stroke="#020617" stroke-width="4" />
+  </g>
+
+  <!-- 2. Top anodized gunmetal bevel chassis -->
+  <rect x="112" y="78" width="800" height="800" rx="176" fill="url(#chassisFace)" />
+  <rect x="114" y="80" width="796" height="796" rx="174" stroke="url(#rimBevel)" stroke-width="5" />
+
+  <!-- 3. Recessed OLED dark-glass display -->
+  <rect x="166" y="132" width="692" height="692" rx="134" fill="url(#glassBg)" />
+  <g clip-path="url(#glassClip)">
+    <rect x="166" y="132" width="692" height="692" fill="url(#oledAmbient)" />
+
+    <!-- Subtle oscilloscope grid -->
+    <g stroke="#1e3a5f" stroke-opacity="0.34" stroke-width="2">
+      <line x1="166" y1="270" x2="858" y2="270" />
+      <line x1="166" y1="408" x2="858" y2="408" />
+      <line x1="166" y1="546" x2="858" y2="546" />
+      <line x1="166" y1="684" x2="858" y2="684" />
+      <line x1="304" y1="132" x2="304" y2="824" />
+      <line x1="442" y1="132" x2="442" y2="824" />
+      <line x1="580" y1="132" x2="580" y2="824" />
+      <line x1="718" y1="132" x2="718" y2="824" />
+    </g>
+
+    <!-- Target setpoint dashed guide line -->
+    <line x1="166" y1="302" x2="858" y2="302" stroke="#22d3ee" stroke-opacity="0.22" stroke-width="3" stroke-dasharray="10 12" />
+
+    <!-- Live cyan OLED temperature curve + area fill -->
+    <path d="M 184 676 C 266 670, 310 612, 378 468 C 430 358, 488 294, 560 288 C 632 282, 682 324, 738 308 C 774 298, 804 300, 840 302 L 840 760 L 184 760 Z"
+          fill="url(#waveArea)" />
+
+    <g filter="url(#cyanGlow)">
+      <path d="M 184 676 C 266 670, 310 612, 378 468 C 430 358, 488 294, 560 288 C 632 282, 682 324, 738 308 C 774 298, 804 300, 840 302"
+            stroke="#22d3ee" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M 184 676 C 266 670, 310 612, 378 468 C 430 358, 488 294, 560 288 C 632 282, 682 324, 738 308 C 774 298, 804 300, 840 302"
+            stroke="#e0faff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Active data sample beacon on waveform -->
+      <circle cx="738" cy="308" r="14" fill="#22d3ee" />
+      <circle cx="738" cy="308" r="6" fill="#ffffff" />
+    </g>
+
+    <!-- Soft warm amber heat bloom reflected on dark glass under soldering tip -->
+    <circle cx="318" cy="654" r="215" fill="url(#tipHeatBloom)" />
+  </g>
+  <rect x="166" y="132" width="692" height="692" rx="134" stroke="url(#glassBevel)" stroke-width="6" />
+
+  <!-- 4. 3D Precision Micro-Soldering Iron (diagonal from top-right to bottom-left) -->
+  <g transform="translate(544, 434) rotate(-45)">
+    <!-- Soft feathered radial glow around heated tip (no hard edge) -->
+    <circle cx="-294" cy="0" r="105" fill="url(#tipLocalAura)" />
+
+    <g filter="url(#ironShadow)">
+      <!-- Heated micro chisel/conical tip -->
+      <g filter="url(#amberGlow)">
+        <path d="M -320 -3.5 L -246 -13.5 L -178 -17 L -178 17 L -246 13.5 L -320 3.5 C -325 2, -325 -2, -320 -3.5 Z"
+              fill="url(#hotTipGrad)" />
+        <path d="M -318 -1.5 L -222 -7.5 L -184 -8.5 L -184 -2.5 L -222 -2.5 L -318 0.5 Z"
+              fill="#ffffff" fill-opacity="0.62" />
+      </g>
+
+      <!-- Cartridge stainless barrel -->
+      <rect x="-178" y="-17" width="198" height="34" rx="2" fill="url(#shaftCyl)" />
+      <rect x="-178" y="-17" width="64" height="34" fill="url(#heatTintRing)" />
+      <rect x="-112" y="-19" width="12" height="38" rx="3" fill="url(#chromeCyl)" />
+      <rect x="-114" y="-17" width="3" height="34" fill="#0f172a" fill-opacity="0.65" />
+
+      <!-- Stepped precision nose-cone / chrome locking collar -->
+      <path d="M 18 -20 L 58 -36 L 58 36 L 18 20 Z" fill="url(#chromeCyl)" />
+      <rect x="58" y="-42" width="62" height="84" rx="8" fill="url(#chromeCyl)" />
+      <rect x="74" y="-42" width="6" height="84" fill="#0f172a" fill-opacity="0.55" />
+      <rect x="94" y="-42" width="6" height="84" fill="#0f172a" fill-opacity="0.55" />
+
+      <!-- Cyan active LED collar ring -->
+      <rect x="120" y="-46" width="11" height="92" rx="4" fill="#22d3ee" filter="url(#collarGlow)" />
+      <rect x="122" y="-42" width="5" height="84" rx="2" fill="#e0faff" fill-opacity="0.9" />
+
+      <!-- Anodized dark gunmetal ergonomic grip handle -->
+      <path d="M 131 -46 L 316 -52 C 338 -52, 354 -38, 354 -14 L 354 14 C 354 38, 338 52, 316 52 L 131 46 Z"
+            fill="url(#gripCyl)" />
+
+      <!-- Tactile machined grip flutes -->
+      <g fill="#060a12" fill-opacity="0.65">
+        <rect x="166" y="-47" width="12" height="94" rx="4" />
+        <rect x="196" y="-48" width="12" height="96" rx="4" />
+        <rect x="226" y="-49" width="12" height="98" rx="4" />
+        <rect x="256" y="-50" width="12" height="100" rx="4" />
+      </g>
+      <g fill="#94a3b8" fill-opacity="0.32">
+        <rect x="166" y="-32" width="12" height="16" rx="2" />
+        <rect x="196" y="-33" width="12" height="16" rx="2" />
+        <rect x="226" y="-34" width="12" height="16" rx="2" />
+        <rect x="256" y="-35" width="12" height="16" rx="2" />
+      </g>
+
+      <!-- Brushed aluminum rear cap & strain-relief boot -->
+      <path d="M 326 -50 C 344 -48, 356 -34, 356 -14 L 356 14 C 356 34, 344 48, 326 50 Z"
+            fill="url(#chromeCyl)" />
+      <rect x="354" y="-18" width="22" height="36" rx="8" fill="#0f172a" stroke="#334155" stroke-width="2" />
+    </g>
+  </g>
+
+  <!-- 5. Top-left 3D glass reflection arc across upper bezel -->
+  <g clip-path="url(#chassisClip)">
+    <path d="M 112 78 L 760 78 C 590 250, 340 430, 112 610 Z" fill="url(#glossSweep)" />
+  </g>
+</svg>
