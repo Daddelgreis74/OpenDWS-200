@@ -21,6 +21,7 @@ typedef struct {
     protocol_ctx_t *proto;
     uint8_t active_preset;
     uint8_t led_override;
+    uint8_t graph_mode;
     uint32_t save_toast_until_ms;
 } app_ctx_t;
 
@@ -316,6 +317,7 @@ int main(void) {
     menu_init(&app.menu);
     app.active_preset = find_preset_index(&app.settings, app.settings.target_c);
     app.led_override = 0u;
+    app.graph_mode = 0u;
     app.save_toast_until_ms = 0u;
 
     /* Initialize PID/safety state + PB6->PC13..PC15 mux; ALWAYS boots in STANDBY */
@@ -367,6 +369,7 @@ int main(void) {
     heater_get_status(&app.hst);
     sensors_update_snapshot(&app.ui_sensors, tip_raw, cur_raw, aux_raw, &snap);
     sensors_record_temp_c(&app.ui_sensors, (uint16_t)(app.hst.tip_deci_c / 10), &snap);
+    sensors_record_power_pct(&app.ui_sensors, app.hst.duty_pct, &snap);
     input_poll(board_ticks_ms(), &inp);
 
     ui_draw_static();
@@ -387,6 +390,7 @@ int main(void) {
     ui_st.led_mask = board_get_leds();
     ui_st.save_toast_active = 0u;
     ui_st.power_off_pending = 0u;
+    ui_st.graph_mode = app.graph_mode;
     ui_st.uptime_ms = board_ticks_ms();
     ui_draw_dynamic(&snap, &inp, &ui_st);
 
@@ -463,7 +467,7 @@ int main(void) {
                     app_beep(&app, 45u);
                 }
 
-                /* Taste 3 (PD2): MODE / OK -> Short: toggle HEAT/STANDBY, Long: Save Flash */
+                /* Taste 3 (PD2): MODE / OK -> Short: toggle Temp+Power Graph, Long: Save Flash */
                 if (inp.pressed_mask & KEY_BIT_PD2) {
                     pd2_armed_on_main = 1u;
                     pd2_was_long = 0u;
@@ -480,14 +484,8 @@ int main(void) {
                 }
                 if (inp.released_mask & KEY_BIT_PD2) {
                     if (pd2_armed_on_main != 0u && pd2_was_long == 0u) {
-                        heater_get_status(&app.hst);
-                        heater_cmd_err_t err = heater_set_enable(app.hst.armed ? 0u : 1u);
-                        if (err == HEATER_CMD_OK) {
-                            app_beep(&app, 40u);
-                        } else {
-                            board_buzzer_beep(180u);
-                        }
-                        heater_get_status(&app.hst);
+                        app.graph_mode = app.graph_mode ? 0u : 1u;
+                        app_beep(&app, 30u);
                     }
                     pd2_armed_on_main = 0u;
                     pd2_was_long = 0u;
@@ -512,6 +510,7 @@ int main(void) {
             heater_get_status(&app.hst);
             sensors_update_snapshot(&app.ui_sensors, tip_raw, cur_raw, aux_raw, &snap);
             sensors_record_temp_c(&app.ui_sensors, (uint16_t)(app.hst.tip_deci_c / 10), &snap);
+            sensors_record_power_pct(&app.ui_sensors, app.hst.duty_pct, &snap);
         }
 
         while (usb_cdc_read_line(cmd_buf, sizeof(cmd_buf)) > 0u) {
@@ -571,6 +570,7 @@ int main(void) {
             ui_st.led_mask = board_get_leds();
             ui_st.save_toast_active = ((int32_t)(app.save_toast_until_ms - now) > 0) ? 1u : 0u;
             ui_st.power_off_pending = (soft_pwr.state == SOFT_PWR_PRESSED) ? 1u : 0u;
+            ui_st.graph_mode = app.graph_mode;
             ui_st.uptime_ms = now;
             ui_draw_dynamic(&snap, &inp, &ui_st);
         }

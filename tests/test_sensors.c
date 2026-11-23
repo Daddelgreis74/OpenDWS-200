@@ -62,6 +62,15 @@ int main(void) {
     assert(snap.cur_ma == 0);
     assert(snap.rail_mv == sensors_rail_adc_to_mv(1500u));
 
+    sensors_record_temp_c(&st, 325u, &snap);
+    sensors_record_power_pct(&st, 74u, &snap);
+    uint8_t last_idx = (uint8_t)((snap.hist_head + SENSOR_HISTORY_LEN - 1u) % SENSOR_HISTORY_LEN);
+    assert(snap.temp_hist[last_idx] == 325u);
+    assert(snap.pwr_hist[last_idx] == 74u);
+
+    sensors_record_power_pct(&st, 150u, &snap);
+    assert(snap.pwr_hist[last_idx] == 100u);
+
     printf("test_sensors: PASS\n");
     return 0;
 }

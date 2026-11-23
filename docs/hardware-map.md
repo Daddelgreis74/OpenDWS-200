@@ -43,7 +43,7 @@ Alle Register, Taktteiler und Pinbelegungen wurden aus der offiziellen Firmware 
 | `PA3` | `ADC1_IN3` | Analog (55,5 Cycl.) | 24-V-Rail-Monitor (`V_rail = adc_V * 16,0`; `1,434 V × 16 = 22,94 V`) |
 | `PC11` | Taste 1 (links): `CH / Return` | Input Pull-Up (Active-LOW) | Phase 2: Preset-Wechsel (`CH1/2/3`) bzw. `CLEAR` bei Fault |
 | `PC12` | Taste 2: `Pfeil links (<)` | Input Pull-Up (Active-LOW) | Phase 2: Solltemperatur `-5 °C` (Langdruck `-25 °C`) |
-| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Hauptschirm: `HEAT` ↔ `STANDBY` (Langdruck: Flash-Save); im Menü: Auswählen/Ändern/Speichern |
+| `PD2` | Taste 3 (Mitte): `MODE / OK` | Input Pull-Up (Active-LOW) | Hauptschirm: zwischen Hauptansicht und Temperatur-/Leistungs-Diagramm (`GRAPH`) umschalten (schaltet Heizung **nicht** ein/aus; Langdruck: Flash-Save); im Menü: Eingaben bestätigen (`OK`) |
 | `PB3` | Taste 4: `Pfeil rechts (>)` | Input Pull-Up (Active-LOW) | Hauptschirm: Sollwert `+5 °C` (Langdruck `+25 °C`); im Menü: Runter / Wert `+` |
 | `PB4` | Taste 5 (rechts): `Menü` | Input Pull-Up (Active-LOW) | Öffnet und schließt das **On-Screen-Einstellungsmenü** (Sleep `100 °C`, Presets, Kalibrierung, Backlight, Buzzer, Stream, Save) |
 | `PB0` | Soft-Power-Taster | Input Pull-Up | Momentan-Taster (`HIGH→LOW→HIGH` beim Loslassen speichert geänderte Settings und zieht `PB1 = LOW`) |

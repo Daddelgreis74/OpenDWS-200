@@ -122,6 +122,7 @@ void sensors_state_init(sensor_state_t *st) {
         st->snap.cur_hist[i] = 0u;
         st->snap.aux_hist[i] = 0u;
         st->snap.temp_hist[i] = 0u;
+        st->snap.pwr_hist[i] = 0u;
     }
 }
 
@@ -177,6 +178,19 @@ void sensors_record_temp_c(sensor_state_t *st, uint16_t temp_c, sensor_snapshot_
     st->snap.temp_hist[idx] = temp_c;
     if (out != NULL) {
         out->temp_hist[idx] = temp_c;
+    }
+}
+
+void sensors_record_power_pct(sensor_state_t *st, uint8_t pwr_pct, sensor_snapshot_t *out) {
+    if (st == NULL) return;
+    if (pwr_pct > 100u) pwr_pct = 100u;
+    /* Store into the most recently pushed slot (hist_head - 1) */
+    uint8_t idx = (st->snap.hist_head == 0u)
+        ? (uint8_t)(SENSOR_HISTORY_LEN - 1u)
+        : (uint8_t)(st->snap.hist_head - 1u);
+    st->snap.pwr_hist[idx] = pwr_pct;
+    if (out != NULL) {
+        out->pwr_hist[idx] = pwr_pct;
     }
 }
 

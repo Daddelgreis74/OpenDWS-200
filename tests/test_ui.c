@@ -14,6 +14,7 @@ int main(void) {
     for (uint16_t i = 0u; i < 32u; ++i) {
         sensors_update_snapshot(&sst, (uint16_t)(200u + i * 50u), 2400u, 1780u, NULL);
         sensors_record_temp_c(&sst, (uint16_t)(25u + i * 9u), NULL);
+        sensors_record_power_pct(&sst, (uint8_t)(90u - i * 2u), NULL);
     }
 
     input_state_t inp = {
@@ -100,6 +101,21 @@ int main(void) {
     /* Verify clean exit back to main screen */
     st.menu.open = 0u;
     st.menu.editing = 0u;
+    ui_draw_dynamic(&sst.snap, &inp, &st);
+
+    /* Verify Temperature + Power Graph mode rendering (PD2 toggle) */
+    st.graph_mode = 1u;
+    ui_draw_dynamic(&sst.snap, &inp, &st);
+    non_black = 0u;
+    for (uint16_t y = 0u; y < LCD_HEIGHT; ++y) {
+        for (uint16_t x = 0u; x < LCD_WIDTH; ++x) {
+            if (host_display_pixel(x, y) != 0u) non_black++;
+        }
+    }
+    assert(non_black == (uint32_t)LCD_WIDTH * (uint32_t)LCD_HEIGHT);
+
+    /* Switch back to main screen cleanly */
+    st.graph_mode = 0u;
     ui_draw_dynamic(&sst.snap, &inp, &st);
 
     printf("test_ui: PASS\n");

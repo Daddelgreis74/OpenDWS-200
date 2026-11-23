@@ -21,7 +21,7 @@
 #define COL_RED_DARK    RGB565(69, 20, 26)
 #define COL_SPARK_BG    RGB565(13, 20, 33)
 
-static uint8_t g_rendered_menu_mode = 0u;
+static uint8_t g_rendered_screen_mode = 0u; /* 0 = MAIN, 1 = MENU, 2 = GRAPH */
 
 static size_t append_fixed_1(char *buf, size_t pos, size_t cap, int32_t deci, uint8_t whole_w) {
     if (deci < 0) deci = 0;
@@ -105,7 +105,7 @@ static void pick_state_style(
 }
 
 void ui_draw_static(void) {
-    g_rendered_menu_mode = 0u;
+    g_rendered_screen_mode = 0u;
     gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
 
     /* Top header bar */
@@ -131,7 +131,7 @@ void ui_draw_static(void) {
 }
 
 static void ui_draw_menu_static(void) {
-    g_rendered_menu_mode = 1u;
+    g_rendered_screen_mode = 1u;
     gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
 
     /* Top header bar */
@@ -146,6 +146,125 @@ static void ui_draw_menu_static(void) {
     /* Bottom 5-button bar */
     gfx_draw_hline(0u, 213u, LCD_WIDTH, COL_BORDER);
     gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
+}
+
+static void ui_draw_graph_static(void) {
+    g_rendered_screen_mode = 2u;
+    gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
+
+    /* Top header bar */
+    gfx_fill_rect(0u, 0u, LCD_WIDTH, 25u, COL_CARD);
+    gfx_draw_hline(0u, 25u, LCD_WIDTH, COL_BORDER);
+    gfx_draw_text(6u, 9u, "OpenDWS-200", COL_TEXT, COL_CARD, 1u);
+
+    /* Compact live telemetry strip card */
+    gfx_fill_rect(6u, 29u, 308u, 34u, COL_CARD);
+    gfx_draw_rect(6u, 29u, 308u, 34u, COL_BORDER);
+    gfx_draw_vline(192u, 33u, 26u, COL_BORDER);
+
+    /* Large Dual Graph card (Temp + Power) */
+    gfx_fill_rect(6u, 67u, 308u, 142u, COL_CARD);
+    gfx_draw_rect(6u, 67u, 308u, 142u, COL_BORDER);
+
+    /* Graph legend */
+    gfx_draw_text(12u, 71u, "TEMP", COL_CYAN, COL_CARD, 1u);
+    gfx_draw_text(42u, 71u, "0..480C", COL_MUTED, COL_CARD, 1u);
+    gfx_draw_text(102u, 71u, "-- SET", COL_MUTED, COL_CARD, 1u);
+    gfx_draw_text(158u, 71u, "PWR", COL_AMBER, COL_CARD, 1u);
+    gfx_draw_text(182u, 71u, "0..100%", COL_MUTED, COL_CARD, 1u);
+
+    /* Left Y-axis labels (Temperature 0..480 C) */
+    gfx_draw_text(10u, 83u, "480", COL_CYAN, COL_CARD, 1u);
+    gfx_draw_text(10u, 120u, "320", COL_CYAN, COL_CARD, 1u);
+    gfx_draw_text(10u, 158u, "160", COL_CYAN, COL_CARD, 1u);
+    gfx_draw_text(22u, 195u, "0", COL_CYAN, COL_CARD, 1u);
+
+    /* Plot border (252x120 plot area inside) */
+    gfx_draw_rect(32u, 82u, 254u, 122u, COL_BORDER);
+
+    /* Right Y-axis labels (Power 0..100 %) */
+    gfx_draw_text(289u, 83u, "100", COL_AMBER, COL_CARD, 1u);
+    gfx_draw_text(289u, 139u, " 50", COL_AMBER, COL_CARD, 1u);
+    gfx_draw_text(289u, 195u, " 0%", COL_AMBER, COL_CARD, 1u);
+
+    /* Bottom 5-button bar */
+    gfx_draw_hline(0u, 213u, LCD_WIDTH, COL_BORDER);
+    gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
+}
+
+static void draw_main_header_badges(
+    const ui_status_t *st,
+    const char *st_label,
+    uint16_t st_fg,
+    uint16_t st_bg,
+    uint16_t st_bd
+) {
+    const heater_status_t *h = &st->hst;
+    if (st->power_off_pending != 0u) {
+        gfx_draw_badge(78u, 4u, 88u, 18u, "POWER OFF!", COL_RED, COL_RED_DARK, COL_RED);
+    } else {
+        gfx_draw_badge(78u, 4u, 88u, 18u, st_label, st_fg, st_bg, st_bd);
+    }
+
+    if (st->usb_connected) {
+        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:CDC", COL_EMERALD, COL_GREEN_DARK, COL_EMERALD);
+    } else {
+        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:---", COL_MUTED, COL_BG, COL_BORDER);
+    }
+
+    gfx_draw_badge(
+        246u, 4u, 68u, 18u,
+        h->is_f245 ? "HDL:F245" : "HDL:F210",
+        h->is_f245 ? COL_CYAN : COL_AMBER,
+        h->is_f245 ? COL_CYAN_DARK : COL_AMBER_DARK,
+        h->is_f245 ? COL_CYAN : COL_AMBER
+    );
+}
+
+static void draw_bottom_buttons(
+    const input_state_t *inp,
+    const char *const lbls[5],
+    uint8_t has_accent,
+    uint16_t acc_fg,
+    uint16_t acc_bg,
+    uint16_t acc_bd
+) {
+    static const uint16_t btn_x[5] = { 4u, 67u, 130u, 195u, 258u };
+    static const uint16_t btn_w[5] = { 58u, 58u, 60u, 58u, 58u };
+    static const uint8_t  btn_bit[5] = { KEY_BIT_PC11, KEY_BIT_PC12, KEY_BIT_PD2, KEY_BIT_PB3, KEY_BIT_PB4 };
+
+    for (uint32_t i = 0u; i < 5u; ++i) {
+        uint8_t held = (inp->held_mask & btn_bit[i]) != 0u;
+        uint16_t fg = held ? COL_CYAN : COL_TEXT;
+        uint16_t bg = held ? COL_CYAN_DARK : COL_CARD;
+        uint16_t bd = held ? COL_CYAN : COL_BORDER;
+        if (!held && has_accent != 0u && i == 2u) {
+            fg = acc_fg;
+            bg = acc_bg;
+            bd = acc_bd;
+        }
+        gfx_draw_badge(btn_x[i], 216u, btn_w[i], 20u, lbls[i], fg, bg, bd);
+    }
+}
+
+static void format_setpoint_str(const heater_status_t *h, char *line, size_t cap) {
+    char num[16];
+    size_t p = 0u;
+    if (h->state == HEATER_SLEEP) {
+        if (h->active_target_c == 0u) {
+            (void)fmt_append_str(line, 0u, cap, "SLP: OFF");
+        } else {
+            p = fmt_append_str(line, p, cap, "SLP:");
+            fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
+            p = fmt_append_str(line, p, cap, num);
+            (void)fmt_append_str(line, p, cap, "C");
+        }
+    } else {
+        p = fmt_append_str(line, p, cap, "SET:");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, cap, num);
+        (void)fmt_append_str(line, p, cap, "C");
+    }
 }
 
 static void draw_padded_16(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg) {
@@ -262,41 +381,134 @@ static void ui_draw_menu_dynamic(const input_state_t *inp, const ui_status_t *st
     }
 
     /* Bottom 5-button navigation hints */
-    static const uint16_t btn_x[5] = { 4u, 67u, 130u, 195u, 258u };
-    static const uint16_t btn_w[5] = { 58u, 58u, 60u, 58u, 58u };
-    static const uint8_t  btn_bit[5] = { KEY_BIT_PC11, KEY_BIT_PC12, KEY_BIT_PD2, KEY_BIT_PB3, KEY_BIT_PB4 };
-    const char *lbl_browse[5] = { "BACK", "UP", "OK", "DOWN", "EXIT" };
-    const char *lbl_edit[5]   = { "DONE", "-",  "OK", "+",    "EXIT" };
+    const char *const lbl_browse[5] = { "BACK", "UP", "OK", "DOWN", "EXIT" };
+    const char *const lbl_edit[5]   = { "DONE", "-",  "OK", "+",    "EXIT" };
     const char *const *lbls = st->menu.editing ? lbl_edit : lbl_browse;
+    uint16_t acc_fg = st->menu.editing ? COL_AMBER : COL_EMERALD;
+    uint16_t acc_bg = st->menu.editing ? COL_AMBER_DARK : COL_GREEN_DARK;
+    draw_bottom_buttons(inp, lbls, 1u, acc_fg, acc_bg, acc_fg);
+}
 
-    for (uint32_t i = 0u; i < 5u; ++i) {
-        uint8_t held = (inp->held_mask & btn_bit[i]) != 0u;
-        uint16_t fg = held ? COL_CYAN : COL_TEXT;
-        uint16_t bg = held ? COL_CYAN_DARK : COL_CARD;
-        uint16_t bd = held ? COL_CYAN : COL_BORDER;
-        if (!held && i == 2u) {
-            fg = st->menu.editing ? COL_AMBER : COL_EMERALD;
-            bg = st->menu.editing ? COL_AMBER_DARK : COL_GREEN_DARK;
-            bd = fg;
-        }
-        gfx_draw_badge(btn_x[i], 216u, btn_w[i], 20u, lbls[i], fg, bg, bd);
+static uint16_t pick_temp_color(const heater_status_t *h, uint16_t st_fg) {
+    if (h->state == HEATER_FAULT || (h->fault_mask & FAULT_OVERTEMP) != 0u) {
+        return COL_RED;
     }
+    if (h->state == HEATER_HEATING) {
+        return st_fg;
+    }
+    if (h->state == HEATER_SLEEP) {
+        return COL_CYAN;
+    }
+    return COL_TEXT;
+}
+
+static void ui_draw_graph_dynamic(
+    const sensor_snapshot_t *snap,
+    const input_state_t *inp,
+    const ui_status_t *st
+) {
+    const heater_status_t *h = &st->hst;
+    char line[64];
+    char num[16];
+
+    const char *st_label;
+    uint16_t st_fg, st_bg, st_bd;
+    pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
+    draw_main_header_badges(st, st_label, st_fg, st_bg, st_bd);
+
+    /* Compact live telemetry left: temperature + setpoint/mode */
+    if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
+        gfx_draw_text(14u, 35u, "OPEN!  ", COL_RED, COL_CARD, 2u);
+    } else {
+        size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
+        line[tp] = '\0';
+        uint16_t temp_col = pick_temp_color(h, st_fg);
+        gfx_draw_text(14u, 35u, line, temp_col, COL_CARD, 2u);
+        gfx_fill_rect(74u, 35u, 26u, 14u, COL_CARD);
+        gfx_draw_rect(76u, 35u, 4u, 4u, temp_col);
+        gfx_draw_text(82u, 36u, "C", temp_col, COL_CARD, 1u);
+    }
+
+    format_setpoint_str(h, line, sizeof(line));
+    size_t sp_len = 0u;
+    while (line[sp_len] != '\0') sp_len++;
+    if (h->state == HEATER_SLEEP) {
+        sp_len = fmt_append_str(line, sp_len, sizeof(line), " (SLEEP)   ");
+    } else if (h->armed == 0u) {
+        sp_len = fmt_append_str(line, sp_len, sizeof(line), " (STANDBY) ");
+    } else {
+        sp_len = fmt_append_str(line, sp_len, sizeof(line), h->is_f245 ? " (F245 PID)" : " (F210 CAP)");
+    }
+    (void)sp_len;
+    gfx_draw_text(14u, 52u, line, (h->state == HEATER_SLEEP) ? COL_CYAN : COL_MUTED, COL_CARD, 1u);
+
+    /* Compact live telemetry right: power % / ticks + current / rail voltage */
+    size_t p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "PWR:");
+    fmt_uint_pad(num, sizeof(num), h->duty_pct, 3u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    p = fmt_append_str(line, p, sizeof(line), "% (");
+    fmt_uint_pad(num, sizeof(num), h->duty_ticks, 2u, ' ');
+    p = fmt_append_str(line, p, sizeof(line), num);
+    (void)fmt_append_str(line, p, sizeof(line), "t)  ");
+    gfx_draw_text(198u, 35u, line, COL_AMBER, COL_CARD, 1u);
+
+    p = 0u;
+    p = fmt_append_str(line, p, sizeof(line), "CUR:");
+    p = append_ma_as_amps(line, p, sizeof(line), h->cur_ma, 0u);
+    p = fmt_append_str(line, p, sizeof(line), "A ");
+    p = append_fixed_1(line, p, sizeof(line), (int32_t)((h->rail_mv + 50u) / 100u), 2u);
+    (void)fmt_append_str(line, p, sizeof(line), "V");
+    gfx_draw_text(198u, 49u, line, COL_TEXT, COL_CARD, 1u);
+
+    /* Save toast in graph card header */
+    if (st->save_toast_active != 0u) {
+        gfx_draw_text(270u, 71u, "SAVED!", COL_EMERALD, COL_CARD, 1u);
+    } else {
+        gfx_draw_text(270u, 71u, "      ", COL_CARD, COL_CARD, 1u);
+    }
+
+    /* Large Dual Graph (Temperature 0..480 C + Power 0..100 % + dashed Setpoint) */
+    gfx_draw_dual_graph(
+        33u, 83u, 252u, 120u,
+        snap->temp_hist, snap->pwr_hist,
+        snap->hist_count, snap->hist_head,
+        TEMP_HARD_CUTOFF_C, h->active_target_c,
+        (h->state == HEATER_FAULT) ? COL_RED : COL_CYAN,
+        COL_AMBER, COL_AMBER_DARK, COL_MUTED, COL_SPARK_BG
+    );
+
+    uint16_t non_settle = h->fault_mask & (uint16_t)~FAULT_SETTLING;
+    const char *const btn_lbl[5] = {
+        non_settle ? "CLR" : "CH",
+        "-5C",
+        "MAIN",
+        "+5C",
+        "MENU"
+    };
+    draw_bottom_buttons(inp, btn_lbl, 1u, COL_CYAN, COL_CYAN_DARK, COL_CYAN);
 }
 
 void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, const ui_status_t *st) {
     if (snap == NULL || inp == NULL || st == NULL) return;
 
-    uint8_t want_menu = st->menu.open ? 1u : 0u;
-    if (want_menu != g_rendered_menu_mode) {
-        if (want_menu != 0u) {
+    uint8_t want_mode = st->menu.open ? 1u : (st->graph_mode ? 2u : 0u);
+    if (want_mode != g_rendered_screen_mode) {
+        if (want_mode == 1u) {
             ui_draw_menu_static();
+        } else if (want_mode == 2u) {
+            ui_draw_graph_static();
         } else {
             ui_draw_static();
         }
     }
 
-    if (want_menu != 0u) {
+    if (want_mode == 1u) {
         ui_draw_menu_dynamic(inp, st);
+        return;
+    }
+    if (want_mode == 2u) {
+        ui_draw_graph_dynamic(snap, inp, st);
         return;
     }
 
@@ -308,25 +520,7 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     const char *st_label;
     uint16_t st_fg, st_bg, st_bd;
     pick_state_style(h, &st_label, &st_fg, &st_bg, &st_bd);
-    if (st->power_off_pending != 0u) {
-        gfx_draw_badge(78u, 4u, 88u, 18u, "POWER OFF!", COL_RED, COL_RED_DARK, COL_RED);
-    } else {
-        gfx_draw_badge(78u, 4u, 88u, 18u, st_label, st_fg, st_bg, st_bd);
-    }
-
-    if (st->usb_connected) {
-        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:CDC", COL_EMERALD, COL_GREEN_DARK, COL_EMERALD);
-    } else {
-        gfx_draw_badge(172u, 4u, 68u, 18u, "USB:---", COL_MUTED, COL_BG, COL_BORDER);
-    }
-
-    gfx_draw_badge(
-        246u, 4u, 68u, 18u,
-        h->is_f245 ? "HDL:F245" : "HDL:F210",
-        h->is_f245 ? COL_CYAN : COL_AMBER,
-        h->is_f245 ? COL_CYAN_DARK : COL_AMBER_DARK,
-        h->is_f245 ? COL_CYAN : COL_AMBER
-    );
+    draw_main_header_badges(st, st_label, st_fg, st_bg, st_bd);
 
     /* Hero Left: Subtitle & Big Temperature */
     if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
@@ -341,39 +535,17 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
         }
         size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
         line[tp] = '\0';
-        uint16_t temp_col = COL_TEXT;
-        if (h->state == HEATER_FAULT || (h->fault_mask & FAULT_OVERTEMP) != 0u) {
-            temp_col = COL_RED;
-        } else if (h->state == HEATER_HEATING) {
-            temp_col = st_fg;
-        } else if (h->state == HEATER_SLEEP) {
-            temp_col = COL_CYAN;
-        }
+        uint16_t temp_col = pick_temp_color(h, st_fg);
         gfx_draw_text(14u, 48u, line, temp_col, COL_CARD, 4u);
         gfx_draw_rect(138u, 48u, 5u, 5u, temp_col);
         gfx_draw_text(145u, 50u, "C", temp_col, COL_CARD, 2u);
     }
 
     /* Setpoint line */
-    size_t p = 0u;
-    if (h->state == HEATER_SLEEP) {
-        if (h->active_target_c == 0u) {
-            (void)fmt_append_str(line, 0u, sizeof(line), "SLP: OFF");
-        } else {
-            p = fmt_append_str(line, p, sizeof(line), "SLP:");
-            fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
-            p = fmt_append_str(line, p, sizeof(line), num);
-            (void)fmt_append_str(line, p, sizeof(line), "C");
-        }
-    } else {
-        p = fmt_append_str(line, p, sizeof(line), "SET:");
-        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        (void)fmt_append_str(line, p, sizeof(line), "C");
-    }
+    format_setpoint_str(h, line, sizeof(line));
     gfx_draw_text(14u, 84u, line, (h->state == HEATER_SLEEP) ? COL_CYAN : COL_TEXT, COL_CARD, 2u);
 
-    p = 0u;
+    size_t p = 0u;
     if (h->state == HEATER_SLEEP) {
         p = fmt_append_str(line, p, sizeof(line), "(SET:");
         fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
@@ -527,27 +699,12 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
     gfx_draw_text(172u, 197u, line, COL_MUTED, COL_CARD, 1u);
 
     /* Bottom verified 5-button bar (Left->Right: PC11, PC12, PD2, PB3, PB4) */
-    static const uint16_t btn_x[5] = { 4u, 67u, 130u, 195u, 258u };
-    static const uint16_t btn_w[5] = { 58u, 58u, 60u, 58u, 58u };
-    static const uint8_t  btn_bit[5] = { KEY_BIT_PC11, KEY_BIT_PC12, KEY_BIT_PD2, KEY_BIT_PB3, KEY_BIT_PB4 };
-    const char *btn_lbl[5] = {
+    const char *const btn_lbl[5] = {
         non_settle ? "CLR" : "CH",
         "-5C",
-        h->armed ? "STOP" : "HEAT",
+        "GRAPH",
         "+5C",
         "MENU"
     };
-
-    for (uint32_t i = 0u; i < 5u; ++i) {
-        uint8_t held = (inp->held_mask & btn_bit[i]) != 0u;
-        uint16_t fg = held ? COL_CYAN : COL_TEXT;
-        uint16_t bg = held ? COL_CYAN_DARK : COL_CARD;
-        uint16_t bd = held ? COL_CYAN : COL_BORDER;
-        if (!held && i == 2u) {
-            fg = h->armed ? COL_RED : COL_EMERALD;
-            bg = h->armed ? COL_RED_DARK : COL_GREEN_DARK;
-            bd = fg;
-        }
-        gfx_draw_badge(btn_x[i], 216u, btn_w[i], 20u, btn_lbl[i], fg, bg, bd);
-    }
+    draw_bottom_buttons(inp, btn_lbl, 0u, COL_TEXT, COL_CARD, COL_BORDER);
 }

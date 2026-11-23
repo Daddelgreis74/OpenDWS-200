@@ -24,3 +24,20 @@ void gfx_draw_sparkline(
     uint16_t fg,
     uint16_t bg
 );
+void gfx_draw_dual_graph(
+    uint16_t x,
+    uint16_t y,
+    uint16_t w,
+    uint16_t h,
+    const uint16_t *temp_samples,
+    const uint8_t *pwr_samples,
+    uint8_t count,
+    uint8_t head,
+    uint16_t temp_max,
+    uint16_t target_c,
+    uint16_t temp_col,
+    uint16_t pwr_col,
+    uint16_t pwr_fill_col,
+    uint16_t target_col,
+    uint16_t bg
+);

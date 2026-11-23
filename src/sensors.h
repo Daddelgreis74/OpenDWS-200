@@ -35,6 +35,7 @@ typedef struct {
     uint16_t cur_hist[SENSOR_HISTORY_LEN];
     uint16_t aux_hist[SENSOR_HISTORY_LEN];
     uint16_t temp_hist[SENSOR_HISTORY_LEN];
+    uint8_t pwr_hist[SENSOR_HISTORY_LEN];
     uint8_t hist_head;
     uint8_t hist_count;
 } sensor_snapshot_t;
@@ -65,6 +66,7 @@ void sensors_update_snapshot(
     sensor_snapshot_t *out
 );
 void sensors_record_temp_c(sensor_state_t *st, uint16_t temp_c, sensor_snapshot_t *out);
+void sensors_record_power_pct(sensor_state_t *st, uint8_t pwr_pct, sensor_snapshot_t *out);
 
 void sensors_init(void);
 uint16_t sensors_read_channel(uint8_t ch, uint8_t sample_time);

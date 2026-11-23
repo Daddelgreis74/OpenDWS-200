@@ -22,8 +22,13 @@ static void populate_sample_trace(
     sensors_state_init(st);
     for (uint32_t i = 0u; i < 64u; ++i) {
         uint16_t temp_c = (uint16_t)(start_c + (((int32_t)end_c - (int32_t)start_c) * (int32_t)i) / 63);
+        uint8_t pwr_pct = 0u;
+        if (end_c > start_c) {
+            pwr_pct = (i < 24u) ? 95u : (uint8_t)(95u - ((i - 24u) * 65u) / 39u);
+        }
         sensors_update_snapshot(st, tip_base, cur_base, aux_base, NULL);
         sensors_record_temp_c(st, temp_c, NULL);
+        sensors_record_power_pct(st, pwr_pct, NULL);
     }
 }
 
@@ -228,6 +233,24 @@ int main(void) {
     ui_draw_static();
     ui_draw_dynamic(&st.snap, &inp, &ui_st);
     snprintf(path, sizeof(path), "%s/04_settings_menu.ppm", SCREEN_PREVIEW_DIR);
+    if (host_display_write_ppm(path) != 0) return 1;
+
+    /* Screen 5: Temperature & Power Dual-Curve Graph Mode (PD2 MODE toggle) */
+    display_init();
+    populate_sample_trace(&st, 2320u, 2260u, 1779u, 28u, 315u);
+    inp.held_mask = 0u;
+    ui_st.menu.open = 0u;
+    ui_st.menu.editing = 0u;
+    ui_st.graph_mode = 1u;
+    ui_st.hst.target_c = 320u;
+    ui_st.hst.active_target_c = 320u;
+    ui_st.hst.tip_deci_c = 3154;
+    ui_st.hst.cur_ma = 2850;
+    ui_st.hst.duty_ticks = 29u;
+    ui_st.hst.duty_pct = 32u;
+    ui_draw_static();
+    ui_draw_dynamic(&st.snap, &inp, &ui_st);
+    snprintf(path, sizeof(path), "%s/05_graph_temp_power.ppm", SCREEN_PREVIEW_DIR);
     if (host_display_write_ppm(path) != 0) return 1;
 
     return 0;
