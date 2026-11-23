@@ -40,6 +40,7 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: '#0b101b',
     title: 'OpenDWS-200 Studio',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -59,7 +60,7 @@ function createWindow() {
 function buildGithubHeaders(token, accept) {
   const headers = {
     Accept: accept || 'application/vnd.github+json',
-    'User-Agent': 'OpenDWS-200-Studio/0.1.0',
+    'User-Agent': `OpenDWS-200-Studio/${app.getVersion()}`,
   };
   const trimmed = String(token || '').trim();
   if (trimmed) {

@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Test, Audit & Build Windows Portable EXE
+    name: Test, Audit & Build Windows Installer & Portable
     runs-on: windows-latest
 
     steps:
@@ -44,7 +44,7 @@ jobs:
         working-directory: pc-app
         run: npm test
 
-      - name: Build Windows portable executable
+      - name: Build Windows installer & portable executables
         working-directory: pc-app
         run: npm run build:win
 

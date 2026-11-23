@@ -1,12 +1,12 @@
 {
   "name": "opendws-200-studio",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "OpenDWS-200 Desktop Studio (Live Telemetry, Control, CSV Logger & Firmware Updater)",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.js",
-    "build:win": "electron-builder --win portable --x64"
+    "build:win": "electron-builder --win nsis portable --x64"
   },
   "devDependencies": {
     "electron": "^45.4.1",
@@ -16,16 +16,41 @@
     "appId": "dev.daddelgreis.opendws200studio",
     "productName": "OpenDWS-200 Studio",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "src/**/*",
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
-        "portable"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenDWS-200 Studio",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "artifactName": "OpenDWS-200-Studio-${version}-win-x64-setup.exe"
     },
     "portable": {
       "artifactName": "OpenDWS-200-Studio-${version}-win-x64-portable.exe"
