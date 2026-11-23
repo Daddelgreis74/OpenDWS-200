@@ -47,6 +47,7 @@ void settings_defaults(opendws_settings_t *out) {
     out->buzzer_en = 1u;
     out->led_test_mask = 0u;
     out->stream_enabled = 0u;
+    out->standby_screen_en = 1u;
     settings_finalize(out);
 }
 
@@ -71,9 +72,9 @@ void settings_finalize(opendws_settings_t *s) {
     }
     s->buzzer_en = s->buzzer_en ? 1u : 0u;
     s->stream_enabled = s->stream_enabled ? 1u : 0u;
+    s->standby_screen_en = s->standby_screen_en ? 1u : 0u;
     s->reserved[0] = 0u;
     s->reserved[1] = 0u;
-    s->reserved[2] = 0u;
     s->crc32 = settings_crc32(s, offsetof(opendws_settings_t, crc32));
 }
 

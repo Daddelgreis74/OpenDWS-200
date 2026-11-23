@@ -51,6 +51,9 @@ static uint32_t adjust_item(menu_item_t item, opendws_settings_t *s, uint8_t is_
     case MENU_ITEM_SLEEP_EN:
         s->sleep_en = s->sleep_en ? 0u : 1u;
         return MENU_ACT_CHANGED_SLEEP;
+    case MENU_ITEM_STANDBY_SCR:
+        s->standby_screen_en = s->standby_screen_en ? 0u : 1u;
+        return MENU_ACT_NONE;
     case MENU_ITEM_PRESET1:
     case MENU_ITEM_PRESET2:
     case MENU_ITEM_PRESET3: {
@@ -131,7 +134,8 @@ uint32_t menu_handle_key(
             m->editing = 0u;
             return MENU_ACT_SAVE_FLASH | MENU_ACT_BEEP_OK;
         }
-        if (item == MENU_ITEM_SLEEP_EN || item == MENU_ITEM_BUZZER || item == MENU_ITEM_STREAM) {
+        if (item == MENU_ITEM_SLEEP_EN || item == MENU_ITEM_STANDBY_SCR ||
+            item == MENU_ITEM_BUZZER || item == MENU_ITEM_STREAM) {
             m->editing = 0u;
             return adjust_item(item, s, is_f245, 1) | MENU_ACT_BEEP_OK;
         }
@@ -168,8 +172,9 @@ uint32_t menu_handle_key(
 
 const char *menu_item_label(menu_item_t item, uint8_t is_f245) {
     switch (item) {
-    case MENU_ITEM_SLEEP_TEMP: return "Sleep Temp";
-    case MENU_ITEM_SLEEP_EN:   return "Auto Stand";
+    case MENU_ITEM_SLEEP_TEMP:  return "Sleep Temp";
+    case MENU_ITEM_SLEEP_EN:    return "Auto Stand";
+    case MENU_ITEM_STANDBY_SCR: return "Standby Screen";
     case MENU_ITEM_PRESET1:    return "Preset CH1";
     case MENU_ITEM_PRESET2:    return "Preset CH2";
     case MENU_ITEM_PRESET3:    return "Preset CH3";
@@ -209,6 +214,9 @@ void menu_format_value(
         break;
     case MENU_ITEM_SLEEP_EN:
         (void)fmt_append_str(buf, p, cap, s->sleep_en ? "ON" : "OFF");
+        break;
+    case MENU_ITEM_STANDBY_SCR:
+        (void)fmt_append_str(buf, p, cap, s->standby_screen_en ? "ON" : "OFF");
         break;
     case MENU_ITEM_PRESET1:
     case MENU_ITEM_PRESET2:

@@ -208,15 +208,18 @@ static void ui_draw_notip_static(void) {
 }
 
 static void ui_draw_standby_static(void) {
-    ui_begin_screen(4u, "OpenDWS-200", COL_TEXT);
+    g_rendered_screen_mode = 4u;
+    gfx_fill_rect(0u, 0u, LCD_WIDTH, LCD_HEIGHT, COL_BG);
 
-    /* Central Standby preheat card */
-    gfx_fill_rect(6u, 30u, 308u, 178u, COL_CARD);
-    gfx_draw_rect(6u, 30u, 308u, 178u, COL_BORDER);
-    gfx_draw_hline(14u, 50u, 292u, COL_BORDER);
-    gfx_draw_vline(194u, 56u, 78u, COL_BORDER);
-    gfx_draw_rect(202u, 67u, 102u, 11u, COL_BORDER);
-    gfx_draw_hline(14u, 138u, 292u, COL_BORDER);
+    /* Calm full-screen Standby frame */
+    gfx_fill_rect(10u, 10u, 300u, 198u, COL_CARD);
+    gfx_draw_rect(10u, 10u, 300u, 198u, COL_CYAN);
+    gfx_draw_hline(24u, 48u, 272u, COL_BORDER);
+    gfx_draw_rect(60u, 98u, 200u, 8u, COL_BORDER);
+
+    /* Bottom 5-button bar */
+    gfx_draw_hline(0u, 213u, LCD_WIDTH, COL_BORDER);
+    gfx_fill_rect(0u, 214u, LCD_WIDTH, 26u, COL_BG);
 }
 
 static void draw_main_header_badges(
@@ -553,116 +556,75 @@ static void ui_draw_standby_dynamic(
     char line[64];
     char num[16];
 
-    uint8_t is_preheat = (h->state == HEATER_SLEEP && h->active_target_c > 0u) ? 1u : 0u;
-    uint16_t accent = (h->in_stand != 0u) ? COL_CYAN : COL_AMBER;
-    uint16_t accent_bg = (h->in_stand != 0u) ? COL_CYAN_DARK : COL_AMBER_DARK;
-    draw_main_header_badges(st, "STANDBY", accent, accent_bg, accent);
-
-    gfx_draw_text(14u, 36u, "STANDBY MODE", COL_CYAN, COL_CARD, 1u);
-    if (is_preheat != 0u) {
-        size_t hp = 0u;
-        hp = fmt_append_str(line, hp, sizeof(line), "PREHEAT:");
-        fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
-        hp = fmt_append_str(line, hp, sizeof(line), num);
-        (void)fmt_append_str(line, hp, sizeof(line), "C  ");
-        gfx_draw_text(202u, 36u, line, COL_CYAN, COL_CARD, 1u);
-    } else if ((h->fault_mask & FAULT_SETTLING) != 0u) {
-        gfx_draw_text(202u, 36u, "SETTLING...   ", COL_AMBER, COL_CARD, 1u);
-    } else if (h->state == HEATER_SLEEP) {
-        gfx_draw_text(202u, 36u, "COLD (0 W)    ", COL_MUTED, COL_CARD, 1u);
+    /* Top corner status tags + centered 9-char title */
+    gfx_draw_text(18u, 18u, h->is_f245 ? "F245" : "F210", COL_MUTED, COL_CARD, 1u);
+    if (st->power_off_pending != 0u) {
+        gfx_draw_text(79u, 20u, "POWER OFF", COL_RED, COL_CARD, 3u);
     } else {
-        gfx_draw_text(202u, 36u, "IDLE / SAFE   ", COL_AMBER, COL_CARD, 1u);
+        gfx_draw_text(79u, 20u, " STANDBY ", COL_CYAN, COL_CARD, 3u);
     }
+    gfx_draw_text(
+        254u, 18u,
+        st->usb_connected ? "USB:ON " : "USB:-- ",
+        st->usb_connected ? COL_EMERALD : COL_MUTED,
+        COL_CARD, 1u
+    );
 
-    /* Hero live tip temperature (watch warm-up to 100 C) */
+    /* Centerpiece live temperature (watch warm-up to 100 C) */
     size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
     line[tp] = '\0';
     uint16_t temp_col = (h->state == HEATER_SLEEP) ? COL_CYAN : COL_TEXT;
-    gfx_draw_text(14u, 59u, line, temp_col, COL_CARD, 4u);
-    gfx_draw_rect(138u, 59u, 5u, 5u, temp_col);
-    gfx_draw_text(145u, 61u, "C", temp_col, COL_CARD, 2u);
+    gfx_draw_text(89u, 58u, line, temp_col, COL_CARD, 4u);
+    gfx_draw_rect(212u, 58u, 5u, 5u, temp_col);
+    gfx_draw_text(219u, 60u, "C", temp_col, COL_CARD, 2u);
 
+    /* Centered preheat progress bar (198 px inside 60..260 border) */
+    uint16_t pct = (h->duty_pct > 100u) ? 100u : (uint16_t)h->duty_pct;
+    uint16_t bar_w = (uint16_t)(((uint32_t)pct * 198u) / 100u);
+    if (bar_w > 0u) {
+        gfx_fill_rect(61u, 99u, bar_w, 6u, COL_CYAN);
+    }
+    if (bar_w < 198u) {
+        gfx_fill_rect((uint16_t)(61u + bar_w), 99u, (uint16_t)(198u - bar_w), 6u, COL_SPARK_BG);
+    }
+
+    /* Centered 27-char status line: Preheat / Sleep vs Next Soldering Target */
     size_t p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "SET:");
+    if (h->state == HEATER_SLEEP && h->active_target_c > 0u) {
+        p = fmt_append_str(line, p, sizeof(line), "PREHEAT ");
+        fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C  ->  NEXT ");
+    } else if (h->state == HEATER_SLEEP) {
+        p = fmt_append_str(line, p, sizeof(line), "SLEEP 0W (COLD) | NEXT ");
+    } else {
+        p = fmt_append_str(line, p, sizeof(line), "IDLE / SAFE     | NEXT ");
+    }
     fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
     p = fmt_append_str(line, p, sizeof(line), num);
     (void)fmt_append_str(line, p, sizeof(line), "C");
-    gfx_draw_text(14u, 100u, line, COL_TEXT, COL_CARD, 2u);
-    gfx_draw_text(114u, 104u, h->is_f245 ? "(NEXT F245)" : "(NEXT F210)", COL_MUTED, COL_CARD, 1u);
-    gfx_draw_text(
-        14u, 122u,
-        h->in_stand ? "STND:IN (AUTO) " : "STND:OUT (WAIT)",
-        h->in_stand ? COL_CYAN : COL_AMBER, COL_CARD, 1u
-    );
+    gfx_draw_text(79u, 114u, line, (h->state == HEATER_SLEEP && h->active_target_c > 0u) ? COL_TEXT : COL_MUTED, COL_CARD, 1u);
 
-    /* Right column: Duty bar + Rail + Current + Sleep target */
-    p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "PWR:");
-    fmt_uint_pad(num, sizeof(num), h->duty_pct, 3u, ' ');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    p = fmt_append_str(line, p, sizeof(line), "% (");
-    fmt_uint_pad(num, sizeof(num), h->duty_ticks, 2u, ' ');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    (void)fmt_append_str(line, p, sizeof(line), "t) ");
-    gfx_draw_text(202u, 56u, line, COL_TEXT, COL_CARD, 1u);
-
-    uint16_t bar_w = (h->duty_pct > 100u) ? 100u : (uint16_t)h->duty_pct;
-    if (bar_w > 0u) {
-        gfx_fill_rect(203u, 68u, bar_w, 9u, COL_CYAN);
-    }
-    if (bar_w < 100u) {
-        gfx_fill_rect((uint16_t)(203u + bar_w), 68u, (uint16_t)(100u - bar_w), 9u, COL_SPARK_BG);
-    }
-
-    uint16_t rail_col = (h->rail_mv >= RAIL_MIN_MV && h->rail_mv <= RAIL_MAX_MV) ? COL_EMERALD : COL_RED;
-    p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "RAIL:");
-    p = append_fixed_1(line, p, sizeof(line), (int32_t)((h->rail_mv + 50u) / 100u), 2u);
-    (void)fmt_append_str(line, p, sizeof(line), "V   ");
-    gfx_draw_text(202u, 85u, line, rail_col, COL_CARD, 1u);
-
-    p = 0u;
-    p = fmt_append_str(line, p, sizeof(line), "CUR :");
-    p = append_ma_as_amps(line, p, sizeof(line), h->cur_ma, 1u);
-    (void)fmt_append_str(line, p, sizeof(line), "A  ");
-    gfx_draw_text(202u, 99u, line, COL_TEXT, COL_CARD, 1u);
-
+    /* Centered 32-char telemetry footer */
     if (st->save_toast_active != 0u) {
-        gfx_draw_text(202u, 115u, "SAVED TO FLASH!", COL_EMERALD, COL_CARD, 1u);
-    } else if (h->sleep_temp_c == 0u) {
-        gfx_draw_text(202u, 115u, "SLP :  OFF     ", COL_MUTED, COL_CARD, 1u);
+        gfx_draw_text(64u, 134u, "         SAVED TO FLASH!        ", COL_EMERALD, COL_CARD, 1u);
     } else {
         p = 0u;
-        p = fmt_append_str(line, p, sizeof(line), "SLP :");
-        fmt_uint_pad(num, sizeof(num), h->sleep_temp_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), "RAIL:");
+        p = append_fixed_1(line, p, sizeof(line), (int32_t)((h->rail_mv + 50u) / 100u), 2u);
+        p = fmt_append_str(line, p, sizeof(line), "V  CUR:");
+        p = append_ma_as_amps(line, p, sizeof(line), h->cur_ma, 1u);
+        p = fmt_append_str(line, p, sizeof(line), "A  PWR:");
+        fmt_uint_pad(num, sizeof(num), pct, 3u, ' ');
         p = fmt_append_str(line, p, sizeof(line), num);
-        (void)fmt_append_str(line, p, sizeof(line), "C    ");
-        gfx_draw_text(202u, 115u, line, COL_CYAN, COL_CARD, 1u);
-    }
-
-    /* Presets strip */
-    static const uint16_t sp_x[3] = { 14u, 113u, 212u };
-    for (uint32_t i = 0u; i < 3u; ++i) {
-        p = 0u;
-        fmt_uint_pad(num, sizeof(num), (uint32_t)(i + 1u), 1u, '0');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), ":");
-        fmt_uint_pad(num, sizeof(num), st->presets_c[i], 3u, '0');
-        p = fmt_append_str(line, p, sizeof(line), num);
-        (void)fmt_append_str(line, p, sizeof(line), "C");
-        uint8_t active = (st->active_preset == i || h->target_c == st->presets_c[i]) ? 1u : 0u;
-        gfx_draw_badge(
-            sp_x[i], 144u, 94u, 20u, line,
-            active ? COL_CYAN : COL_MUTED,
-            active ? COL_CYAN_DARK : COL_BG,
-            active ? COL_CYAN : COL_BORDER
-        );
+        (void)fmt_append_str(line, p, sizeof(line), "%");
+        gfx_draw_text(64u, 134u, line, COL_MUTED, COL_CARD, 1u);
     }
 
     if (h->in_stand != 0u) {
-        gfx_draw_badge(14u, 174u, 292u, 26u, "LIFT IRON FROM STAND TO HEAT", COL_CYAN, COL_CYAN_DARK, COL_CYAN);
+        gfx_draw_badge(24u, 158u, 272u, 32u, "LIFT IRON FROM STAND TO HEAT", COL_CYAN, COL_CYAN_DARK, COL_CYAN);
     } else {
-        gfx_draw_badge(14u, 174u, 292u, 26u, "PLACE IRON IN STAND FIRST", COL_AMBER, COL_AMBER_DARK, COL_AMBER);
+        gfx_draw_badge(24u, 158u, 272u, 32u, "PLACE IRON IN STAND FIRST", COL_AMBER, COL_AMBER_DARK, COL_AMBER);
     }
 
     uint16_t non_settle = h->fault_mask & (uint16_t)~FAULT_SETTLING;
@@ -688,7 +650,8 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
         want_mode = 3u;
     } else if (st->graph_mode != 0u) {
         want_mode = 2u;
-    } else if (active_faults == 0u &&
+    } else if (st->settings.standby_screen_en != 0u &&
+               active_faults == 0u &&
                (st->hst.state == HEATER_SLEEP ||
                 st->hst.state == HEATER_STANDBY ||
                 (st->hst.state == HEATER_PROBE && st->hst.in_stand != 0u))) {

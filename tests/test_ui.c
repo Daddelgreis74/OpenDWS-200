@@ -118,11 +118,23 @@ int main(void) {
     st.graph_mode = 0u;
     ui_draw_dynamic(&sst.snap, &inp, &st);
 
-    /* Verify Standby Preheat (100 C) dedicated screen */
+    /* Verify Standby Preheat (100 C) dedicated screen when enabled vs main dashboard when disabled */
     st.hst.state = HEATER_SLEEP;
     st.hst.in_stand = 1u;
     st.hst.active_target_c = 100u;
     st.hst.tip_deci_c = 1002;
+    st.settings.standby_screen_en = 1u;
+    ui_draw_dynamic(&sst.snap, &inp, &st);
+    non_black = 0u;
+    for (uint16_t y = 0u; y < LCD_HEIGHT; ++y) {
+        for (uint16_t x = 0u; x < LCD_WIDTH; ++x) {
+            if (host_display_pixel(x, y) != 0u) non_black++;
+        }
+    }
+    assert(non_black == (uint32_t)LCD_WIDTH * (uint32_t)LCD_HEIGHT);
+
+    /* With Standby Screen OFF, HEATER_SLEEP stays on normal Main dashboard */
+    st.settings.standby_screen_en = 0u;
     ui_draw_dynamic(&sst.snap, &inp, &st);
     non_black = 0u;
     for (uint16_t y = 0u; y < LCD_HEIGHT; ++y) {

@@ -6,17 +6,18 @@
 #include <stdint.h>
 
 typedef enum {
-    MENU_ITEM_SLEEP_TEMP = 0,
-    MENU_ITEM_SLEEP_EN   = 1,
-    MENU_ITEM_PRESET1    = 2,
-    MENU_ITEM_PRESET2    = 3,
-    MENU_ITEM_PRESET3    = 4,
-    MENU_ITEM_CAL        = 5,
-    MENU_ITEM_BACKLIGHT  = 6,
-    MENU_ITEM_BUZZER     = 7,
-    MENU_ITEM_STREAM     = 8,
-    MENU_ITEM_SAVE       = 9,
-    MENU_ITEM_COUNT      = 10
+    MENU_ITEM_SLEEP_TEMP  = 0,
+    MENU_ITEM_SLEEP_EN    = 1,
+    MENU_ITEM_STANDBY_SCR = 2,
+    MENU_ITEM_PRESET1     = 3,
+    MENU_ITEM_PRESET2     = 4,
+    MENU_ITEM_PRESET3     = 5,
+    MENU_ITEM_CAL         = 6,
+    MENU_ITEM_BACKLIGHT   = 7,
+    MENU_ITEM_BUZZER      = 8,
+    MENU_ITEM_STREAM      = 9,
+    MENU_ITEM_SAVE        = 10,
+    MENU_ITEM_COUNT       = 11
 } menu_item_t;
 
 #define MENU_VISIBLE_ROWS 6u

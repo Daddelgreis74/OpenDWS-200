@@ -50,7 +50,22 @@ int main(void) {
     assert((act & MENU_ACT_CHANGED_SLEEP) != 0u);
     assert(s.sleep_en == 0u && m.editing == 0u);
 
-    /* Wrap-around UP (PC12) from cursor 1 -> 0 -> 9 (Save to Flash), verify scroll_top */
+    /* Step down to Standby Screen (item 2), verify label & PD2 toggle ON <-> OFF */
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert(m.cursor == MENU_ITEM_STANDBY_SCR);
+    assert(strcmp(menu_item_label(MENU_ITEM_STANDBY_SCR, 1u), "Standby Screen") == 0);
+    char sbval[16];
+    menu_format_value(MENU_ITEM_STANDBY_SCR, &s, 1u, 0u, sbval, sizeof(sbval));
+    assert(strcmp(sbval, "ON") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
+    assert(s.standby_screen_en == 0u && m.editing == 0u);
+    menu_format_value(MENU_ITEM_STANDBY_SCR, &s, 1u, 0u, sbval, sizeof(sbval));
+    assert(strcmp(sbval, "OFF") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
+    assert(s.standby_screen_en == 1u);
+    (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u); /* back to item 1 */
+
+    /* Wrap-around UP (PC12) from cursor 1 -> 0 -> 10 (Save to Flash), verify scroll_top */
     (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
     assert(m.cursor == 0u);
     (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
@@ -61,12 +76,12 @@ int main(void) {
     act = menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
     assert((act & MENU_ACT_SAVE_FLASH) != 0u);
 
-    /* Step down wraps 9 -> 0 */
+    /* Step down wraps 10 -> 0 */
     (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     assert(m.cursor == 0u && m.scroll_top == 0u);
 
-    /* Jump to Cal (item 5) for F245 vs F210 */
-    for (int i = 0; i < 5; ++i) {
+    /* Jump to Cal (item 6) for F245 vs F210 */
+    for (int i = 0; i < 6; ++i) {
         (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     }
     assert(m.cursor == MENU_ITEM_CAL);

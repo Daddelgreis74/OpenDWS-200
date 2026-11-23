@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC   0x5357444Fu /* "ODWS" */
-#define SETTINGS_VERSION 3u
+#define SETTINGS_VERSION 4u
 
 typedef struct {
     uint32_t magic;
@@ -20,7 +20,8 @@ typedef struct {
     uint8_t  buzzer_en;
     uint8_t  led_test_mask;
     uint8_t  stream_enabled;
-    uint8_t  reserved[3];
+    uint8_t  standby_screen_en;
+    uint8_t  reserved[2];
     uint32_t crc32;
 } opendws_settings_t;
 
