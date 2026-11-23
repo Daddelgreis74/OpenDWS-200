@@ -1,3 +1,4 @@
+#include "app_config.h"
 #include "input.h"
 #include "menu.h"
 
