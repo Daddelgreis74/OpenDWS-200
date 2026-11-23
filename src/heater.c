@@ -78,6 +78,9 @@ void heater_ctrl_init(
     c->open_tip_recover_cnt = 0u;
     c->probe_pending = 1u;
     c->overload_cnt = 0u;
+    c->auto_off_sec = (uint16_t)(AUTO_OFF_DEFAULT_MIN * 60u);
+    c->sleep_elapsed_ticks = 0u;
+    c->auto_off_triggered = 0u;
     c->duty_ticks = 0u;
     c->duty_pct = 0u;
     c->active_target_c = c->target_c;
@@ -245,6 +248,10 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
     }
 
     /* Automatic wake-up on stand lift (PB5: 0 -> 1) when Auto Stand enabled & safe */
+    if (c->in_stand == 0u || lifted_edge != 0u) {
+        c->sleep_elapsed_ticks = 0u;
+        c->auto_off_triggered = 0u;
+    }
     if (lifted_edge != 0u && c->sleep_en != 0u) {
         if (c->armed == 0u) {
             c->armed = 1u;
@@ -275,8 +282,25 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
         return PROBE_PULSE_TICKS;
     }
 
-    /* 9. Active setpoint (Sleep in stand vs Active target) */
+    /* 9. Active setpoint (Sleep in stand + Auto-Off timer vs Active target) */
     if (c->sleep_en != 0u && c->in_stand != 0u) {
+        if (c->auto_off_sec > 0u) {
+            uint32_t auto_off_ticks = (uint32_t)c->auto_off_sec * 100u;
+            if (c->sleep_elapsed_ticks < auto_off_ticks) {
+                c->sleep_elapsed_ticks++;
+            }
+            if (c->sleep_elapsed_ticks >= auto_off_ticks) {
+                c->armed = 0u;
+                c->auto_off_triggered = 1u;
+                c->boot_auto_standby_done = 1u;
+                c->duty_ticks = 0u;
+                c->duty_pct = 0u;
+                c->active_target_c = 0u;
+                reset_pid(c);
+                c->state = HEATER_STANDBY;
+                return 0u;
+            }
+        }
         c->state = HEATER_SLEEP;
         if (c->sleep_temp_c == 0u) {
             c->active_target_c = 0u;
@@ -455,6 +479,8 @@ heater_cmd_err_t heater_ctrl_set_enable(heater_ctrl_t *c, uint8_t enable) {
     if (enable == 0u) {
         c->armed = 0u;
         c->boot_auto_standby_done = 1u;
+        c->sleep_elapsed_ticks = 0u;
+        c->auto_off_triggered = 0u;
         c->duty_ticks = 0u;
         c->duty_pct = 0u;
         reset_pid(c);
@@ -483,6 +509,8 @@ heater_cmd_err_t heater_ctrl_set_enable(heater_ctrl_t *c, uint8_t enable) {
     if (c->armed == 0u) {
         c->armed = 1u;
         c->probe_pending = 1u;
+        c->sleep_elapsed_ticks = 0u;
+        c->auto_off_triggered = 0u;
         c->cur_peak_ma = 0;
         reset_pid(c);
     }
@@ -510,6 +538,20 @@ heater_cmd_err_t heater_ctrl_set_sleep(heater_ctrl_t *c, uint8_t enable, uint16_
         c->sleep_temp_c = sleep_temp_c;
     }
     c->sleep_en = enable ? 1u : 0u;
+    if (c->sleep_en == 0u) {
+        c->sleep_elapsed_ticks = 0u;
+        c->auto_off_triggered = 0u;
+    }
+    return HEATER_CMD_OK;
+}
+
+heater_cmd_err_t heater_ctrl_set_auto_off(heater_ctrl_t *c, uint8_t minutes) {
+    if (c == NULL) return HEATER_CMD_ERR_FAULT;
+    if (minutes > AUTO_OFF_MAX_MIN) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    c->auto_off_sec = (uint16_t)minutes * 60u;
+    c->sleep_elapsed_ticks = 0u;
     return HEATER_CMD_OK;
 }
 
@@ -564,6 +606,17 @@ void heater_ctrl_get_status(const heater_ctrl_t *c, uint8_t pin_on, heater_statu
     out->tip_raw = c->tip_raw;
     out->cur_raw = c->cur_raw;
     out->aux_raw = c->aux_raw;
+    out->auto_off_triggered = c->auto_off_triggered;
+    if (c->state == HEATER_SLEEP && c->auto_off_sec > 0u) {
+        uint32_t total_ticks = (uint32_t)c->auto_off_sec * 100u;
+        if (total_ticks > c->sleep_elapsed_ticks) {
+            out->auto_off_rem_s = (uint16_t)((total_ticks - c->sleep_elapsed_ticks + 99u) / 100u);
+        } else {
+            out->auto_off_rem_s = 0u;
+        }
+    } else {
+        out->auto_off_rem_s = 0u;
+    }
 }
 
 void heater_ready_notify_init(heater_ready_notify_t *n) {
@@ -839,6 +892,13 @@ heater_cmd_err_t heater_set_sleep(uint8_t enable, uint16_t sleep_temp_c, uint8_t
     return r;
 }
 
+heater_cmd_err_t heater_set_auto_off(uint8_t minutes) {
+    lock_control_irqs();
+    heater_cmd_err_t r = heater_ctrl_set_auto_off(&g_ctrl, minutes);
+    unlock_control_irqs();
+    return r;
+}
+
 heater_cmd_err_t heater_set_cal(int16_t offset_c) {
     lock_control_irqs();
     heater_cmd_err_t r = heater_ctrl_set_cal(&g_ctrl, offset_c);
@@ -890,6 +950,7 @@ heater_cmd_err_t heater_set_target(uint16_t temp_c) { return heater_ctrl_set_tar
 heater_cmd_err_t heater_set_sleep(uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp) {
     return heater_ctrl_set_sleep(&g_ctrl, enable, sleep_temp_c, update_temp);
 }
+heater_cmd_err_t heater_set_auto_off(uint8_t minutes) { return heater_ctrl_set_auto_off(&g_ctrl, minutes); }
 heater_cmd_err_t heater_set_cal(int16_t offset_c) { return heater_ctrl_set_cal(&g_ctrl, offset_c); }
 heater_cmd_err_t heater_clear_fault(void) { return heater_ctrl_clear_fault(&g_ctrl); }
 void heater_get_status(heater_status_t *out) { heater_ctrl_get_status(&g_ctrl, board_heater_is_on(), out); }

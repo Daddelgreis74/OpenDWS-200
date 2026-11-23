@@ -454,7 +454,6 @@ static void ui_draw_graph_dynamic(
         line[tp] = '\0';
         uint16_t temp_col = pick_temp_color(h, st_fg);
         gfx_draw_text(14u, 35u, line, temp_col, COL_CARD, 2u);
-        gfx_fill_rect(74u, 35u, 26u, 14u, COL_CARD);
         gfx_draw_rect(76u, 35u, 4u, 4u, temp_col);
         gfx_draw_text(82u, 36u, "C", temp_col, COL_CARD, 1u);
     }
@@ -588,37 +587,67 @@ static void ui_draw_standby_dynamic(
         gfx_fill_rect((uint16_t)(61u + bar_w), 99u, (uint16_t)(198u - bar_w), 6u, COL_SPARK_BG);
     }
 
-    /* Centered 27-char status line: Preheat / Sleep vs Next Soldering Target */
+    /* Centered 28-char status line: Preheat + Auto-Off Countdown or Next Target */
     size_t p = 0u;
-    if (h->state == HEATER_SLEEP && h->active_target_c > 0u) {
+    uint16_t status_col = COL_MUTED;
+    if (h->auto_off_triggered != 0u) {
+        p = fmt_append_str(line, p, sizeof(line), "AUTO-OFF (0W)  -> NEXT ");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C");
+        status_col = COL_AMBER;
+    } else if (h->state == HEATER_SLEEP && h->active_target_c > 0u) {
         p = fmt_append_str(line, p, sizeof(line), "PREHEAT ");
         fmt_uint_pad(num, sizeof(num), h->active_target_c, 3u, ' ');
         p = fmt_append_str(line, p, sizeof(line), num);
-        p = fmt_append_str(line, p, sizeof(line), "C  ->  NEXT ");
+        if (h->auto_off_rem_s > 0u) {
+            uint16_t mm = h->auto_off_rem_s / 60u;
+            uint16_t ss = h->auto_off_rem_s % 60u;
+            p = fmt_append_str(line, p, sizeof(line), "C | OFF IN ");
+            fmt_uint_pad(num, sizeof(num), mm, 2u, '0');
+            p = fmt_append_str(line, p, sizeof(line), num);
+            p = fmt_append_str(line, p, sizeof(line), ":");
+            fmt_uint_pad(num, sizeof(num), ss, 2u, '0');
+            p = fmt_append_str(line, p, sizeof(line), num);
+        } else {
+            p = fmt_append_str(line, p, sizeof(line), "C  ->  NEXT ");
+            fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+            p = fmt_append_str(line, p, sizeof(line), num);
+            p = fmt_append_str(line, p, sizeof(line), "C");
+        }
+        status_col = COL_TEXT;
     } else if (h->state == HEATER_SLEEP) {
         p = fmt_append_str(line, p, sizeof(line), "SLEEP 0W (COLD) | NEXT ");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C");
     } else {
-        p = fmt_append_str(line, p, sizeof(line), "IDLE / SAFE     | NEXT ");
+        p = fmt_append_str(line, p, sizeof(line), "IDLE / SAFE    |  NEXT ");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C");
     }
-    fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
-    p = fmt_append_str(line, p, sizeof(line), num);
-    (void)fmt_append_str(line, p, sizeof(line), "C");
-    gfx_draw_text(79u, 114u, line, (h->state == HEATER_SLEEP && h->active_target_c > 0u) ? COL_TEXT : COL_MUTED, COL_CARD, 1u);
+    while (p < 28u) {
+        line[p++] = ' ';
+    }
+    line[p] = '\0';
+    gfx_draw_text(76u, 114u, line, status_col, COL_CARD, 1u);
 
-    /* Centered 32-char telemetry footer */
+    /* Centered 31-char telemetry footer */
     if (st->save_toast_active != 0u) {
-        gfx_draw_text(64u, 134u, "         SAVED TO FLASH!        ", COL_EMERALD, COL_CARD, 1u);
+        gfx_draw_text(67u, 134u, "        SAVED TO FLASH!        ", COL_EMERALD, COL_CARD, 1u);
     } else {
         p = 0u;
-        p = fmt_append_str(line, p, sizeof(line), "RAIL:");
+        p = fmt_append_str(line, p, sizeof(line), "NEXT:");
+        fmt_uint_pad(num, sizeof(num), h->target_c, 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
+        p = fmt_append_str(line, p, sizeof(line), "C  RAIL:");
         p = append_fixed_1(line, p, sizeof(line), (int32_t)((h->rail_mv + 50u) / 100u), 2u);
-        p = fmt_append_str(line, p, sizeof(line), "V  CUR:");
-        p = append_ma_as_amps(line, p, sizeof(line), h->cur_ma, 1u);
-        p = fmt_append_str(line, p, sizeof(line), "A  PWR:");
+        p = fmt_append_str(line, p, sizeof(line), "V  PWR:");
         fmt_uint_pad(num, sizeof(num), pct, 3u, ' ');
         p = fmt_append_str(line, p, sizeof(line), num);
         (void)fmt_append_str(line, p, sizeof(line), "%");
-        gfx_draw_text(64u, 134u, line, COL_MUTED, COL_CARD, 1u);
+        gfx_draw_text(67u, 134u, line, COL_MUTED, COL_CARD, 1u);
     }
 
     if (h->in_stand != 0u) {

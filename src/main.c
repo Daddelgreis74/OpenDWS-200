@@ -262,6 +262,7 @@ static void perform_soft_power_off(app_ctx_t *app) {
 static void apply_menu_actions(app_ctx_t *app, uint32_t act, uint32_t now) {
     if ((act & MENU_ACT_CHANGED_SLEEP) != 0u) {
         (void)heater_set_sleep(app->settings.sleep_en, app->settings.sleep_temp_c, 1u);
+        (void)heater_set_auto_off(app->settings.auto_off_min);
         heater_get_status(&app->hst);
     }
     if ((act & MENU_ACT_CHANGED_PRESET) != 0u) {
@@ -328,6 +329,7 @@ int main(void) {
         app.settings.cal_f245_deci_c,
         app.settings.cal_f210_deci_c
     );
+    (void)heater_set_auto_off(app.settings.auto_off_min);
 
     display_init();
     board_set_backlight(app.settings.backlight_pct);
@@ -535,6 +537,9 @@ int main(void) {
             app_beep(&app, 35u);
         } else if (prev_heater_state == HEATER_HEATING && app.hst.state == HEATER_SLEEP) {
             app_beep(&app, 20u);
+        } else if (prev_heater_state == HEATER_SLEEP && app.hst.state == HEATER_STANDBY &&
+                   app.hst.auto_off_triggered != 0u) {
+            app_beep(&app, 180u);
         }
         if (heater_ready_notify_step(&ready_notify, &app.hst) != 0u) {
             app_beep(&app, 100u);

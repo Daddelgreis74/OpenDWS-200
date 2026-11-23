@@ -14,6 +14,7 @@ int main(void) {
     assert(s.sleep_temp_c == 100u);
     assert(s.sleep_en == 1u);
     assert(s.standby_screen_en == 1u);
+    assert(s.auto_off_min == 10u);
     assert(s.backlight_pct == 80u);
     assert(settings_validate(&s) == 1);
 
@@ -26,6 +27,7 @@ int main(void) {
     s.stream_enabled = 1u;
     s.stream_interval_ms = 250u;
     s.standby_screen_en = 0u;
+    s.auto_off_min = 15u;
     settings_finalize(&s);
     assert(settings_validate(&s) == 1);
 
@@ -39,6 +41,7 @@ int main(void) {
     assert(loaded.stream_enabled == 1u);
     assert(loaded.stream_interval_ms == 250u);
     assert(loaded.standby_screen_en == 0u);
+    assert(loaded.auto_off_min == 15u);
 
     assert(settings_save_flash(&s) == 1);
     assert(settings_matches_flash(&s) == 1);

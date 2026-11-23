@@ -69,6 +69,9 @@ typedef struct {
     uint16_t overload_cnt;
     uint16_t runaway_cnt;
     int32_t  runaway_ref_dc;
+    uint16_t auto_off_sec;
+    uint32_t sleep_elapsed_ticks;
+    uint8_t  auto_off_triggered;
 
     /* Incremental PID state (1 unit = 0.0001 tick) */
     int32_t  pid_out_ut;
@@ -104,6 +107,8 @@ typedef struct {
     uint16_t tip_raw;
     uint16_t cur_raw;
     uint16_t aux_raw;
+    uint16_t auto_off_rem_s;
+    uint8_t  auto_off_triggered;
 } heater_status_t;
 
 /* Pure, host-testable control logic */
@@ -127,6 +132,7 @@ void heater_ctrl_sample_current_slot5(heater_ctrl_t *c, uint16_t cur_raw, uint8_
 heater_cmd_err_t heater_ctrl_set_enable(heater_ctrl_t *c, uint8_t enable);
 heater_cmd_err_t heater_ctrl_set_target(heater_ctrl_t *c, uint16_t temp_c);
 heater_cmd_err_t heater_ctrl_set_sleep(heater_ctrl_t *c, uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp);
+heater_cmd_err_t heater_ctrl_set_auto_off(heater_ctrl_t *c, uint8_t minutes);
 heater_cmd_err_t heater_ctrl_set_cal(heater_ctrl_t *c, int16_t offset_c);
 heater_cmd_err_t heater_ctrl_clear_fault(heater_ctrl_t *c);
 void heater_ctrl_get_status(const heater_ctrl_t *c, uint8_t pin_on, heater_status_t *out);
@@ -168,6 +174,7 @@ void heater_hw_start(void);
 heater_cmd_err_t heater_set_enable(uint8_t enable);
 heater_cmd_err_t heater_set_target(uint16_t temp_c);
 heater_cmd_err_t heater_set_sleep(uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp);
+heater_cmd_err_t heater_set_auto_off(uint8_t minutes);
 heater_cmd_err_t heater_set_cal(int16_t offset_c);
 heater_cmd_err_t heater_clear_fault(void);
 void heater_get_status(heater_status_t *out);

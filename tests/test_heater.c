@@ -271,6 +271,36 @@ int main(void) {
     assert(heater_open_tip_alarm_step(&ota, FAULT_NONE, 3300u) == 0u);
     assert(heater_open_tip_alarm_step(&ota, FAULT_OPEN_TIP, 3400u) == 1u);
 
+    /* 13. Auto-Off timer cuts heater to cold STANDBY after sleep timeout and wakes on stand lift */
+    heater_ctrl_t ao;
+    heater_ctrl_init(&ao, 1u, 0u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_update_rail(&ao, 1780u);
+    assert(heater_ctrl_set_auto_off(&ao, 1u) == HEATER_CMD_OK); /* 60 s timeout */
+    assert(heater_ctrl_set_auto_off(&ao, 99u) == HEATER_CMD_ERR_RANGE);
+    for (uint32_t i = 0u; i <= HANDLE_SETTLE_TICKS; ++i) {
+        (void)heater_ctrl_step_10ms(&ao, 720u, 1u, 0u);
+    }
+    /* One tick consumes HEATER_PROBE, next enters HEATER_SLEEP */
+    (void)heater_ctrl_step_10ms(&ao, 720u, 1u, 0u);
+    heater_status_t ao_st;
+    heater_ctrl_get_status(&ao, 0u, &ao_st);
+    assert(ao_st.state == HEATER_SLEEP);
+    assert(ao_st.auto_off_rem_s == 60u);
+    for (uint32_t i = 0u; i < 6000u - 1u; ++i) {
+        (void)heater_ctrl_step_10ms(&ao, 720u, 1u, 0u);
+    }
+    heater_ctrl_get_status(&ao, 0u, &ao_st);
+    assert(ao_st.state == HEATER_STANDBY);
+    assert(ao_st.armed == 0u);
+    assert(ao_st.auto_off_triggered == 1u);
+    assert(ao_st.duty_ticks == 0u && ao_st.auto_off_rem_s == 0u);
+    /* Lifting out of stand clears auto_off_triggered and wakes with probe pulse */
+    for (uint32_t i = 0u; i < STAND_OUT_DEBOUNCE_TICKS - 1u; ++i) {
+        (void)heater_ctrl_step_10ms(&ao, 720u, 1u, 1u);
+    }
+    assert(heater_ctrl_step_10ms(&ao, 720u, 1u, 1u) == PROBE_PULSE_TICKS);
+    assert(ao.armed == 1u && ao.auto_off_triggered == 0u);
+
     printf("test_heater: PASS\n");
     return 0;
 }

@@ -63,9 +63,32 @@ int main(void) {
     assert(strcmp(sbval, "OFF") == 0);
     (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
     assert(s.standby_screen_en == 1u);
+
+    /* Step down to Auto Off (item 3), test stepping 10 -> 15 -> 30 -> 60 and down to 0 (OFF) */
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert(m.cursor == MENU_ITEM_AUTO_OFF);
+    assert(strcmp(menu_item_label(MENU_ITEM_AUTO_OFF, 1u), "Auto Off") == 0);
+    assert(s.auto_off_min == 10u);
+    menu_format_value(MENU_ITEM_AUTO_OFF, &s, 1u, 0u, sbval, sizeof(sbval));
+    assert(strcmp(sbval, "10 min") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* edit Auto Off */
+    act = menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert((act & MENU_ACT_CHANGED_SLEEP) != 0u && s.auto_off_min == 15u);
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert(s.auto_off_min == 30u);
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
+    assert(s.auto_off_min == 60u);
+    for (int i = 0; i < 6; ++i) {
+        (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
+    }
+    assert(s.auto_off_min == 0u);
+    menu_format_value(MENU_ITEM_AUTO_OFF, &s, 1u, 0u, sbval, sizeof(sbval));
+    assert(strcmp(sbval, "OFF") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* exit edit */
+    (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u); /* back to item 2 */
     (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u); /* back to item 1 */
 
-    /* Wrap-around UP (PC12) from cursor 1 -> 0 -> 10 (Save to Flash), verify scroll_top */
+    /* Wrap-around UP (PC12) from cursor 1 -> 0 -> 11 (Save to Flash), verify scroll_top */
     (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
     assert(m.cursor == 0u);
     (void)menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
@@ -76,12 +99,12 @@ int main(void) {
     act = menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
     assert((act & MENU_ACT_SAVE_FLASH) != 0u);
 
-    /* Step down wraps 10 -> 0 */
+    /* Step down wraps 11 -> 0 */
     (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     assert(m.cursor == 0u && m.scroll_top == 0u);
 
-    /* Jump to Cal (item 6) for F245 vs F210 */
-    for (int i = 0; i < 6; ++i) {
+    /* Jump to Cal (item 7) for F245 vs F210 */
+    for (int i = 0; i < 7; ++i) {
         (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     }
     assert(m.cursor == MENU_ITEM_CAL);

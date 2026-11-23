@@ -77,16 +77,59 @@ void gfx_draw_badge(
     uint16_t bg,
     uint16_t border
 ) {
-    gfx_fill_rect(x, y, w, h, bg);
-    gfx_draw_rect(x, y, w, h, border);
-    if (label == NULL) return;
+    if (w == 0u || h == 0u) return;
+    if (w > 320u) w = 320u;
 
     uint16_t len = 0u;
-    while (label[len] != '\0') len++;
+    if (label != NULL) {
+        while (label[len] != '\0') len++;
+    }
     uint16_t text_w = (uint16_t)(len * FONT5X7_ADVANCE);
-    uint16_t tx = (w > text_w) ? (uint16_t)(x + (w - text_w) / 2u) : (uint16_t)(x + 2u);
-    uint16_t ty = (h > FONT5X7_HEIGHT) ? (uint16_t)(y + (h - FONT5X7_HEIGHT) / 2u) : (uint16_t)(y + 1u);
-    gfx_draw_text(tx, ty, label, fg, bg, 1u);
+    uint16_t tx_rel = (w > text_w) ? (uint16_t)((w - text_w) / 2u) : 2u;
+    uint16_t ty_rel = (h > FONT5X7_HEIGHT) ? (uint16_t)((h - FONT5X7_HEIGHT) / 2u) : 1u;
+
+    uint16_t strip_rows = (uint16_t)(sizeof(g_tile_buf) / (sizeof(uint16_t) * w));
+    if (strip_rows == 0u) return;
+
+    for (uint16_t row0 = 0u; row0 < h; row0 = (uint16_t)(row0 + strip_rows)) {
+        uint16_t chunk_h = (uint16_t)(h - row0);
+        if (chunk_h > strip_rows) chunk_h = strip_rows;
+
+        for (uint16_t r = 0u; r < chunk_h; ++r) {
+            uint16_t gy = (uint16_t)(row0 + r);
+            uint8_t is_edge_y = (gy == 0u || gy == (uint16_t)(h - 1u)) ? 1u : 0u;
+            uint32_t off = (uint32_t)r * w;
+            for (uint16_t c = 0u; c < w; ++c) {
+                uint8_t is_edge = (is_edge_y != 0u || c == 0u || c == (uint16_t)(w - 1u)) ? 1u : 0u;
+                g_tile_buf[off + c] = is_edge ? border : bg;
+            }
+        }
+
+        if (label != NULL && h > 2u && w > 2u) {
+            for (uint16_t i = 0u; i < len; ++i) {
+                uint16_t cx0 = (uint16_t)(tx_rel + i * FONT5X7_ADVANCE);
+                if ((uint16_t)(cx0 + 1u) >= w) break;
+                const uint8_t *glyph = font5x7_glyph(label[i]);
+                for (uint16_t sy = 0u; sy < FONT5X7_HEIGHT; ++sy) {
+                    uint16_t gy = (uint16_t)(ty_rel + sy);
+                    if (gy < row0 || gy >= (uint16_t)(row0 + chunk_h) ||
+                        gy == 0u || gy >= (uint16_t)(h - 1u)) {
+                        continue;
+                    }
+                    uint32_t row_off = (uint32_t)(gy - row0) * w;
+                    for (uint16_t sx = 0u; sx < FONT5X7_WIDTH; ++sx) {
+                        uint16_t gx = (uint16_t)(cx0 + sx);
+                        if (gx == 0u || gx >= (uint16_t)(w - 1u)) continue;
+                        if (((glyph[sx] >> sy) & 1u) != 0u) {
+                            g_tile_buf[row_off + gx] = fg;
+                        }
+                    }
+                }
+            }
+        }
+
+        display_blit_rgb565(x, (uint16_t)(y + row0), w, chunk_h, g_tile_buf);
+    }
 }
 
 void gfx_draw_sparkline(

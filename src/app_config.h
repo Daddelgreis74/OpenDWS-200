@@ -2,7 +2,7 @@
 
 /* OpenDWS-200 Firmware Configuration (Phase 2 - Closed-Loop PID & Safety) */
 #ifndef OPENDWS_VERSION_STR
-#define OPENDWS_VERSION_STR "v0.2.6-phase2"
+#define OPENDWS_VERSION_STR "v0.2.7-phase2"
 #endif
 
 /* Phase 2: Heater enabled ONLY on explicit user command, ALWAYS boots in STANDBY (PA2 LOW). */
@@ -38,7 +38,7 @@
 /* Loop & Stream Timing */
 #define WDT_TIMEOUT_MS          2000u
 #define SENSOR_SAMPLE_MS        50u
-#define UI_REFRESH_MS           66u
+#define UI_REFRESH_MS           100u
 #define STREAM_DEFAULT_MS       100u
 #define STREAM_MIN_MS           50u
 #define STREAM_MAX_MS           2000u
@@ -51,6 +51,8 @@
 #define SLEEP_TEMP_MIN_C        50u
 #define SLEEP_TEMP_MAX_C        250u
 #define SLEEP_TEMP_DEFAULT_C    100u
+#define AUTO_OFF_DEFAULT_MIN    10u
+#define AUTO_OFF_MAX_MIN        60u
 #define CAL_OFFSET_MIN_C        (-50)
 #define CAL_OFFSET_MAX_C        50
 

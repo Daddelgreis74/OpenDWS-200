@@ -69,7 +69,9 @@ int main(void) {
             .duty_pct = 12u,
             .tip_raw = 720u,
             .cur_raw = 2130u,
-            .aux_raw = 1779u
+            .aux_raw = 1779u,
+            .auto_off_rem_s = 588u,
+            .auto_off_triggered = 0u
         },
         .presets_c = { 200u, 300u, 350u },
         .active_preset = 1u,

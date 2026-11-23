@@ -48,6 +48,7 @@ void settings_defaults(opendws_settings_t *out) {
     out->led_test_mask = 0u;
     out->stream_enabled = 0u;
     out->standby_screen_en = 1u;
+    out->auto_off_min = AUTO_OFF_DEFAULT_MIN;
     settings_finalize(out);
 }
 
@@ -73,8 +74,10 @@ void settings_finalize(opendws_settings_t *s) {
     s->buzzer_en = s->buzzer_en ? 1u : 0u;
     s->stream_enabled = s->stream_enabled ? 1u : 0u;
     s->standby_screen_en = s->standby_screen_en ? 1u : 0u;
+    if (s->auto_off_min > AUTO_OFF_MAX_MIN) {
+        s->auto_off_min = AUTO_OFF_MAX_MIN;
+    }
     s->reserved[0] = 0u;
-    s->reserved[1] = 0u;
     s->crc32 = settings_crc32(s, offsetof(opendws_settings_t, crc32));
 }
 
@@ -109,6 +112,9 @@ int settings_validate(const opendws_settings_t *s) {
         return 0;
     }
     if (s->stream_interval_ms < STREAM_MIN_MS || s->stream_interval_ms > STREAM_MAX_MS) {
+        return 0;
+    }
+    if (s->auto_off_min > AUTO_OFF_MAX_MIN) {
         return 0;
     }
     uint32_t expected = settings_crc32(s, offsetof(opendws_settings_t, crc32));

@@ -30,6 +30,22 @@ static uint16_t step_u16(uint16_t val, int16_t delta, uint16_t lo, uint16_t hi) 
     return (uint16_t)next;
 }
 
+static uint8_t step_auto_off_min(uint8_t cur, int8_t dir) {
+    static const uint8_t opts[6] = { 0u, 5u, 10u, 15u, 30u, 60u };
+    int32_t idx = 0;
+    for (int32_t i = 0; i < 6; ++i) {
+        if (cur >= opts[i]) {
+            idx = i;
+        }
+    }
+    if (dir < 0 && idx > 0) {
+        idx--;
+    } else if (dir > 0 && idx < 5) {
+        idx++;
+    }
+    return opts[idx];
+}
+
 static uint32_t adjust_item(menu_item_t item, opendws_settings_t *s, uint8_t is_f245, int8_t dir) {
     if (s == NULL) return MENU_ACT_NONE;
     switch (item) {
@@ -54,6 +70,9 @@ static uint32_t adjust_item(menu_item_t item, opendws_settings_t *s, uint8_t is_
     case MENU_ITEM_STANDBY_SCR:
         s->standby_screen_en = s->standby_screen_en ? 0u : 1u;
         return MENU_ACT_NONE;
+    case MENU_ITEM_AUTO_OFF:
+        s->auto_off_min = step_auto_off_min(s->auto_off_min, dir);
+        return MENU_ACT_CHANGED_SLEEP;
     case MENU_ITEM_PRESET1:
     case MENU_ITEM_PRESET2:
     case MENU_ITEM_PRESET3: {
@@ -175,6 +194,7 @@ const char *menu_item_label(menu_item_t item, uint8_t is_f245) {
     case MENU_ITEM_SLEEP_TEMP:  return "Sleep Temp";
     case MENU_ITEM_SLEEP_EN:    return "Auto Stand";
     case MENU_ITEM_STANDBY_SCR: return "Standby Screen";
+    case MENU_ITEM_AUTO_OFF:    return "Auto Off";
     case MENU_ITEM_PRESET1:    return "Preset CH1";
     case MENU_ITEM_PRESET2:    return "Preset CH2";
     case MENU_ITEM_PRESET3:    return "Preset CH3";
@@ -217,6 +237,15 @@ void menu_format_value(
         break;
     case MENU_ITEM_STANDBY_SCR:
         (void)fmt_append_str(buf, p, cap, s->standby_screen_en ? "ON" : "OFF");
+        break;
+    case MENU_ITEM_AUTO_OFF:
+        if (s->auto_off_min == 0u) {
+            (void)fmt_append_str(buf, p, cap, "OFF");
+        } else {
+            fmt_uint_pad(num, sizeof(num), s->auto_off_min, 1u, '0');
+            p = fmt_append_str(buf, p, cap, num);
+            (void)fmt_append_str(buf, p, cap, " min");
+        }
         break;
     case MENU_ITEM_PRESET1:
     case MENU_ITEM_PRESET2:
