@@ -1,8 +1,8 @@
 PROJECT := opendws200
-VERSION ?= v0.2.7-phase2
+VERSION ?= v1.0.0
 BUILD := build
 DIST := dist
-OUT_BIN := $(DIST)/APP_DWS_200_OpenDWS-$(VERSION).bin
+OUT_BIN := $(DIST)/OpenDWS-200-Firmware-$(VERSION).bin
 
 CLANG ?= clang
 OBJCOPY ?= llvm-objcopy
@@ -86,7 +86,6 @@ $(BUILD)/$(PROJECT).elf: $(OBJS) linker.ld
 $(OUT_BIN): $(BUILD)/$(PROJECT).elf
 	@mkdir -p $(DIST)
 	$(OBJCOPY) -O binary $< $@
-	sha256sum $@ > $@.sha256
 
 verify-bin: $(OUT_BIN) $(BUILD)/$(PROJECT).elf
 	$(OBJDUMP) -d $(BUILD)/$(PROJECT).elf > $(BUILD)/$(PROJECT).disasm

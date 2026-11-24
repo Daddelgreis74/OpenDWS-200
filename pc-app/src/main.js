@@ -259,6 +259,7 @@ app.whenReady().then(() => {
       if (!rel || rel.draft) continue;
       const assets = Array.isArray(rel.assets) ? rel.assets : [];
       const binAsset =
+        assets.find((a) => /^OpenDWS-200-Firmware.*\.bin$/i.test(a.name)) ||
         assets.find((a) => /^APP_DWS_200_.*\.bin$/i.test(a.name)) ||
         assets.find((a) => /\.bin$/i.test(a.name));
       if (!binAsset) continue;

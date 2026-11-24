@@ -51,7 +51,6 @@ jobs:
           name: opendws-200-firmware
           path: |
             dist/*.bin
-            dist/*.sha256
             docs/screenshots/*.png
           retention-days: 14
 
@@ -84,22 +83,12 @@ jobs:
         working-directory: pc-app
         run: npm run build:win
 
-      - name: Generate SHA-256 checksums
-        working-directory: pc-app/dist
-        shell: pwsh
-        run: |
-          Get-ChildItem *.exe | ForEach-Object {
-            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
-            "$hash  $($_.Name)" | Set-Content "$($_.FullName).sha256" -Encoding ascii
-          }
-
       - name: Upload Windows EXE artifacts
         uses: actions/upload-artifact@v4
         with:
           name: opendws-200-studio-win-x64
           path: |
             pc-app/dist/*.exe
-            pc-app/dist/*.sha256
           retention-days: 14
 
   release:
@@ -124,8 +113,8 @@ jobs:
       - name: Collect combined release files
         run: |
           mkdir -p release-files
-          find artifacts/firmware -type f \( -name '*.bin' -o -name '*.bin.sha256' \) -exec cp -v {} release-files/ \;
-          find artifacts/pc-app -type f \( -name '*.exe' -o -name '*.exe.sha256' \) -exec cp -v {} release-files/ \;
+          find artifacts/firmware -type f -name '*.bin' -exec cp -v {} release-files/ \;
+          find artifacts/pc-app -type f -name '*.exe' -exec cp -v {} release-files/ \;
           ls -lh release-files
 
       - name: Publish Combined GitHub Release (Firmware + PC Studio)

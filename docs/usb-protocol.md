@@ -13,7 +13,7 @@ Im laufenden Betrieb meldet sich OpenDWS-200 am USB-C-Port als **USB CDC-ACM (Vi
 | Befehl | Beschreibung | Beispielantwort |
 | :--- | :--- | :--- |
 | `HELP` oder `?` | Liste aller Befehle | `OK CMDS: HELP \| INFO \| STAT \| ...` |
-| `INFO` | Firmware, MCU, Griff, Zustand, 24-V-Rail, Uptime | `INFO fw=v0.3.1 mcu=AT32F415RCT7 clk=144MHz safe_mode=0 handle=F245 state=STANDBY rail_mv=22940 uptime_ms=12540` |
+| `INFO` | Firmware, MCU, Griff, Zustand, 24-V-Rail, Uptime | `INFO fw=v1.0.0 mcu=AT32F415RCT7 clk=144MHz safe_mode=0 handle=F245 state=STANDBY rail_mv=22940 uptime_ms=12540` |
 | `STAT` | Vollständiger Telemetrie-Schnappschuss | `STAT ms=12540 state=HEAT fault=0x00(NONE) handle=F245 tip_c=300.2 target_c=300 act_c=300 duty=45 ticks=40 rail_mv=22928 ... cal=0,0,0 presets=200,300,350` |
 | `HEAT <ON\|OFF\|1\|0>` | Heizung aktivieren / in `STANDBY` setzen (verweigert bei `NO_24V_RAIL` oder aktivem Fault) | `OK HEAT=ON` oder `ERR NO_24V_RAIL` |
 | `TEMP <100..450>` | Solltemperatur in °C setzen (`SET <t>` als Alias) | `OK TEMP=320` |

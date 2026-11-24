@@ -1,6 +1,6 @@
 {
   "name": "opendws-200-studio",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "description": "OpenDWS-200 Desktop Studio (Live Telemetry, Control, CSV Logger & Firmware Updater)",
   "main": "src/main.js",
   "scripts": {
@@ -50,10 +50,10 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "artifactName": "OpenDWS-200-Studio-${version}-win-x64-setup.exe"
+      "artifactName": "OpenDWS-200-Studio-Setup-v${version}.exe"
     },
     "portable": {
-      "artifactName": "OpenDWS-200-Studio-${version}-win-x64-portable.exe"
+      "artifactName": "OpenDWS-200-Studio-Portable-v${version}.exe"
     }
   }
 }
