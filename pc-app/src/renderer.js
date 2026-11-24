@@ -8,6 +8,30 @@
   const OPENDWS_VID = 0x2e3c;
   const OPENDWS_PID = 0x5740;
   const STORAGE_AUTO_CONNECT = 'opendws.autoConnect';
+  const STORAGE_PRESETS = 'opendws.presets';
+  const DEFAULT_PRESETS = [200, 300, 350];
+
+  function clampPresetTemp(v, fallback) {
+    const n = Number.parseInt(v, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(100, Math.min(450, n));
+  }
+
+  function loadStoredPresets() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_PRESETS) || 'null');
+      if (Array.isArray(raw) && raw.length === 3) {
+        return raw.map((v, i) => clampPresetTemp(v, DEFAULT_PRESETS[i]));
+      }
+    } catch {}
+    return [...DEFAULT_PRESETS];
+  }
+
+  function saveStoredPresets(presets) {
+    try {
+      localStorage.setItem(STORAGE_PRESETS, JSON.stringify(presets));
+    } catch {}
+  }
 
   const state = {
     port: null,
@@ -17,6 +41,8 @@
     connecting: false,
     manualDisconnect: false,
     autoConnect: localStorage.getItem(STORAGE_AUTO_CONNECT) !== '0',
+    presets: loadStoredPresets(),
+    stationHasPresets: false,
     chartPaused: false,
     windowSec: 180,
     samples: [],
@@ -243,12 +269,26 @@
       el.valBl.textContent = `${stat.bl}%`;
     }
 
+    if (Array.isArray(stat.presets) && stat.presets.length === 3) {
+      state.stationHasPresets = true;
+      let changed = false;
+      for (let i = 0; i < 3; i++) {
+        const inp = document.querySelector(`[data-preset-input="${i + 1}"]`);
+        const pVal = clampPresetTemp(stat.presets[i], DEFAULT_PRESETS[i]);
+        if (document.activeElement !== inp && state.presets[i] !== pVal) {
+          state.presets[i] = pVal;
+          changed = true;
+        }
+      }
+      if (changed) {
+        saveStoredPresets(state.presets);
+      }
+      renderPresetButtons();
+    }
+
     document.querySelectorAll('.btn-preset').forEach((btn) => {
-      const idx = btn.dataset.preset;
-      const match =
-        (idx === '1' && stat.targetC === 200) ||
-        (idx === '2' && stat.targetC === 300) ||
-        (idx === '3' && stat.targetC === 350);
+      const idx = Number.parseInt(btn.dataset.preset, 10) - 1;
+      const match = idx >= 0 && idx < 3 && stat.targetC === state.presets[idx];
       btn.classList.toggle('active', match);
     });
   }
@@ -450,6 +490,7 @@
       }
     } catch {}
 
+    state.stationHasPresets = false;
     resetTempDisplayFilter();
     el.kpiTemp.textContent = '--- °C';
     if (el.calHandleBadge) {
@@ -689,9 +730,64 @@
     sendCommand(`TEMP ${v}`);
   });
 
+  function renderPresetButtons() {
+    document.querySelectorAll('.btn-preset').forEach((btn) => {
+      const n = Number.parseInt(btn.dataset.preset, 10);
+      if (n >= 1 && n <= 3) {
+        btn.textContent = `CH${n} · ${state.presets[n - 1]}°C`;
+      }
+    });
+    document.querySelectorAll('.input-preset').forEach((inp) => {
+      const n = Number.parseInt(inp.dataset.presetInput, 10);
+      if (n >= 1 && n <= 3 && document.activeElement !== inp) {
+        inp.value = String(state.presets[n - 1]);
+      }
+    });
+  }
+
+  function commitPresetInput(inp) {
+    const n = Number.parseInt(inp.dataset.presetInput, 10);
+    if (!(n >= 1 && n <= 3)) return;
+    const idx = n - 1;
+    const val = clampPresetTemp(inp.value, state.presets[idx]);
+    inp.value = String(val);
+    state.presets[idx] = val;
+    saveStoredPresets(state.presets);
+    renderPresetButtons();
+    if (state.connected && state.stationHasPresets) {
+      sendCommand(`PRESET ${n} ${val}`);
+      setToast(`CH${n} auf ${val} °C gesetzt (SAVE FLASH zum Speichern).`);
+    } else if (state.connected) {
+      setToast(`CH${n} lokal auf ${val} °C gesetzt.`);
+    }
+  }
+
   document.querySelectorAll('.btn-preset').forEach((btn) => {
-    btn.addEventListener('click', () => sendCommand(`PRESET ${btn.dataset.preset}`));
+    btn.addEventListener('click', () => {
+      const n = Number.parseInt(btn.dataset.preset, 10);
+      if (!(n >= 1 && n <= 3)) return;
+      if (state.stationHasPresets) {
+        sendCommand(`PRESET ${n}`);
+      } else {
+        const val = state.presets[n - 1];
+        el.sliderTemp.value = String(val);
+        el.ctrlTargetBadge.textContent = `${val} °C`;
+        sendCommand(`TEMP ${val}`);
+      }
+    });
   });
+
+  document.querySelectorAll('.input-preset').forEach((inp) => {
+    inp.addEventListener('change', () => commitPresetInput(inp));
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        inp.blur();
+      }
+    });
+  });
+
+  renderPresetButtons();
 
   el.btnHeatOn.addEventListener('click', () => sendCommand('HEAT ON'));
   el.btnHeatOff.addEventListener('click', () => sendCommand('HEAT OFF'));

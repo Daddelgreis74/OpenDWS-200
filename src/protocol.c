@@ -128,26 +128,36 @@ static int parse_i32(const char *s, int32_t *out) {
     return 1;
 }
 
-static int parse_cal_args(const char *s, uint8_t *has_pt, int32_t *pt, int32_t *off) {
-    if (s == NULL || has_pt == NULL || pt == NULL || off == NULL) return 0;
+static int split_two_args(const char *s, char *tok1, size_t cap1, const char **rest) {
+    if (s == NULL || tok1 == NULL || cap1 == 0u || rest == NULL) return 0;
     while (*s == ' ' || *s == '\t') s++;
     if (*s == '\0') return 0;
 
-    char tok1[24];
     size_t tlen = 0u;
     while (*s != '\0' && *s != ' ' && *s != '\t') {
-        if (tlen + 1u >= sizeof(tok1)) return 0;
+        if (tlen + 1u >= cap1) return 0;
         tok1[tlen++] = *s++;
     }
     tok1[tlen] = '\0';
 
     while (*s == ' ' || *s == '\t') s++;
-    if (*s == '\0') {
+    *rest = s;
+    return 1;
+}
+
+static int parse_cal_args(const char *s, uint8_t *has_pt, int32_t *pt, int32_t *off) {
+    char tok1[24];
+    const char *rest = NULL;
+    if (has_pt == NULL || pt == NULL || off == NULL ||
+        !split_two_args(s, tok1, sizeof(tok1), &rest)) {
+        return 0;
+    }
+    if (*rest == '\0') {
         *has_pt = 0u;
         return parse_i32(tok1, off);
     }
     *has_pt = 1u;
-    return parse_i32(tok1, pt) && parse_i32(s, off);
+    return parse_i32(tok1, pt) && parse_i32(rest, off);
 }
 
 static void emit_heater_err(protocol_ctx_t *ctx, heater_cmd_err_t err) {
@@ -255,6 +265,16 @@ void protocol_emit_stat(
     p = append_i32(out, p, sizeof(out), (int32_t)(hst->cal_dc[1] / 10));
     p = fmt_append_str(out, p, sizeof(out), ",");
     p = append_i32(out, p, sizeof(out), (int32_t)(hst->cal_dc[2] / 10));
+    if (ctx->ops.get_presets != NULL) {
+        uint16_t p_c[3] = { 200u, 300u, 350u };
+        ctx->ops.get_presets(p_c, ctx->ops.user);
+        p = fmt_append_str(out, p, sizeof(out), " presets=");
+        p = append_u32(out, p, sizeof(out), p_c[0]);
+        p = fmt_append_str(out, p, sizeof(out), ",");
+        p = append_u32(out, p, sizeof(out), p_c[1]);
+        p = fmt_append_str(out, p, sizeof(out), ",");
+        p = append_u32(out, p, sizeof(out), p_c[2]);
+    }
     p = fmt_append_str(out, p, sizeof(out), "\r\n");
     emit_str(ctx, out);
 }
@@ -301,7 +321,7 @@ void protocol_handle_line(
 
     if (eq_ci(cmd, "HELP") || eq_ci(cmd, "?")) {
         emit_str(ctx,
-            "OK CMDS: HELP | INFO | STAT | HEAT <ON|OFF> | TEMP <100..450> | PRESET <1..3> | "
+            "OK CMDS: HELP | INFO | STAT | HEAT <ON|OFF> | TEMP <100..450> | PRESET <1..3> [100..450] | "
             "SLEEP <ON|OFF|0|50..250> | CAL [150|250|350] <-50..50> | CLEAR | SAVE | STREAM [ON|OFF|50..2000] | "
             "BL <0..100> | BEEP [10..1000] | LED <0..255|AUTO> | REBOOT\r\n");
         return;
@@ -387,13 +407,32 @@ void protocol_handle_line(
     }
 
     if (prefix_ci(cmd, "PRESET")) {
+        char tok1[16];
+        const char *rest = NULL;
         uint32_t idx = 0u;
-        if (!parse_u32(cmd + 6, &idx) || idx < 1u || idx > 3u) {
+        if (!split_two_args(cmd + 6, tok1, sizeof(tok1), &rest) ||
+            !parse_u32(tok1, &idx) || idx < 1u || idx > 3u) {
             emit_str(ctx, "ERR PRESET_RANGE_1_3\r\n");
             return;
         }
         uint16_t temp_c = TEMP_DEFAULT_C;
-        if (ctx->ops.select_preset != NULL) {
+        if (*rest != '\0') {
+            uint32_t new_temp = 0u;
+            if (!parse_u32(rest, &new_temp) || new_temp < TEMP_MIN_C || new_temp > TEMP_MAX_C) {
+                emit_str(ctx, "ERR TEMP_RANGE_100_450\r\n");
+                return;
+            }
+            if (ctx->ops.set_preset == NULL) {
+                emit_str(ctx, "ERR UNSUPPORTED\r\n");
+                return;
+            }
+            heater_cmd_err_t err = ctx->ops.set_preset((uint8_t)idx, (uint16_t)new_temp, ctx->ops.user);
+            if (err != HEATER_CMD_OK) {
+                emit_heater_err(ctx, err);
+                return;
+            }
+            temp_c = (uint16_t)new_temp;
+        } else if (ctx->ops.select_preset != NULL) {
             heater_cmd_err_t err = ctx->ops.select_preset((uint8_t)idx, &temp_c, ctx->ops.user);
             if (err != HEATER_CMD_OK) {
                 emit_heater_err(ctx, err);

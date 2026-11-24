@@ -17,6 +17,8 @@ typedef struct {
     heater_cmd_err_t (*set_heater)(uint8_t enable, void *user);
     heater_cmd_err_t (*set_target)(uint16_t temp_c, void *user);
     heater_cmd_err_t (*select_preset)(uint8_t idx_1_to_3, uint16_t *out_temp_c, void *user);
+    heater_cmd_err_t (*set_preset)(uint8_t idx_1_to_3, uint16_t temp_c, void *user);
+    void (*get_presets)(uint16_t out_c[3], void *user);
     heater_cmd_err_t (*set_sleep)(uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp, void *user);
     heater_cmd_err_t (*set_cal)(int16_t offset_c, void *user);
     heater_cmd_err_t (*set_cal_point)(uint8_t point_idx, int16_t offset_c, void *user);

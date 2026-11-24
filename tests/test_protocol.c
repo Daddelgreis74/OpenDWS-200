@@ -13,6 +13,7 @@ typedef struct {
     uint8_t leds_auto;
     uint8_t rebooted;
     uint8_t saved;
+    uint16_t presets[3];
     heater_status_t hst;
 } mock_ctx_t;
 
@@ -53,11 +54,27 @@ static heater_cmd_err_t mock_set_target(uint16_t t, void *user) {
 }
 
 static heater_cmd_err_t mock_select_preset(uint8_t idx, uint16_t *out_t, void *user) {
-    static const uint16_t p[3] = { 200u, 300u, 350u };
     mock_ctx_t *m = (mock_ctx_t *)user;
-    m->hst.target_c = p[idx - 1u];
+    if (idx < 1u || idx > 3u) return HEATER_CMD_ERR_RANGE;
+    m->hst.target_c = m->presets[idx - 1u];
     if (out_t != NULL) *out_t = m->hst.target_c;
     return HEATER_CMD_OK;
+}
+
+static heater_cmd_err_t mock_set_preset(uint8_t idx, uint16_t temp_c, void *user) {
+    mock_ctx_t *m = (mock_ctx_t *)user;
+    if (idx < 1u || idx > 3u || temp_c < TEMP_MIN_C || temp_c > TEMP_MAX_C) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    m->presets[idx - 1u] = temp_c;
+    return HEATER_CMD_OK;
+}
+
+static void mock_get_presets(uint16_t out_c[3], void *user) {
+    const mock_ctx_t *m = (const mock_ctx_t *)user;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        out_c[i] = m->presets[i];
+    }
 }
 
 static heater_cmd_err_t mock_set_sleep(uint8_t en, uint16_t st, uint8_t upd, void *user) {
@@ -111,6 +128,9 @@ int main(void) {
     m.hst.tip_deci_c = 245;
     m.hst.rail_mv = 22920u;
     m.hst.cur_zero_mv = 1642u;
+    m.presets[0] = 200u;
+    m.presets[1] = 300u;
+    m.presets[2] = 350u;
 
     protocol_ops_t ops = {
         .write = mock_write,
@@ -122,6 +142,8 @@ int main(void) {
         .set_heater = mock_set_heater,
         .set_target = mock_set_target,
         .select_preset = mock_select_preset,
+        .set_preset = mock_set_preset,
+        .get_presets = mock_get_presets,
         .set_sleep = mock_set_sleep,
         .set_cal = mock_set_cal,
         .set_cal_point = mock_set_cal_point,
@@ -161,6 +183,7 @@ int main(void) {
     assert(strstr(m.out, "rail_mv=22920") != NULL);
     assert(strstr(m.out, "heater=0") != NULL);
     assert(strstr(m.out, "cal=0,0,0") != NULL);
+    assert(strstr(m.out, "presets=200,300,350") != NULL);
 
     /* HEAT blocked when < 15 V USB-only */
     m.hst.rail_mv = 2320u;
@@ -194,6 +217,27 @@ int main(void) {
     reset_out(&m);
     protocol_handle_line(&proto, "PRESET 3", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
     assert(strcmp(m.out, "OK PRESET=3 TEMP=350\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "PRESET 2 325", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK PRESET=2 TEMP=325\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "PRESET 2", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK PRESET=2 TEMP=325\r\n") == 0);
+    assert(m.hst.target_c == 325u);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "PRESET 2 500", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "ERR TEMP_RANGE_100_450\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "PRESET 4 300", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "ERR PRESET_RANGE_1_3\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "STAT", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strstr(m.out, "presets=200,325,350") != NULL);
 
     reset_out(&m);
     protocol_handle_line(&proto, "SLEEP OFF", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);

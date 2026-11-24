@@ -342,6 +342,19 @@ html, body {
   color: var(--cyan);
 }
 
+.preset-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-preset {
+  width: 100% !important;
+  text-align: center;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+}
+
 .field-row {
   display: flex;
   align-items: center;

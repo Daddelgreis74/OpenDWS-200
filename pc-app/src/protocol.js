@@ -44,7 +44,7 @@
     return { faultHex: str, faultName: str };
   }
 
-  function parseCalList(raw) {
+  function parseIntTriple(raw) {
     if (typeof raw !== 'string' || !raw.trim()) return null;
     const parts = raw.split(',');
     if (parts.length !== 3) return null;
@@ -107,7 +107,8 @@
       bl: toInt(kv.bl, 0),
       ledHex: kv.led || '0x00',
       heaterOn: toInt(kv.heater, 0),
-      cal: parseCalList(kv.cal),
+      cal: parseIntTriple(kv.cal),
+      presets: parseIntTriple(kv.presets),
       watts,
     };
   }

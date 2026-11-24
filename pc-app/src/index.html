@@ -99,9 +99,18 @@
           </div>
 
           <div class="btn-row-3">
-            <button class="btn btn-preset" data-preset="1">CH1 · 200°C</button>
-            <button class="btn btn-preset" data-preset="2">CH2 · 300°C</button>
-            <button class="btn btn-preset" data-preset="3">CH3 · 350°C</button>
+            <div class="preset-slot">
+              <button class="btn btn-preset" data-preset="1">CH1 · 200°C</button>
+              <input type="number" class="input-num input-preset" data-preset-input="1" min="100" max="450" step="5" value="200" title="CH1 Temperatur (100..450 °C)" />
+            </div>
+            <div class="preset-slot">
+              <button class="btn btn-preset" data-preset="2">CH2 · 300°C</button>
+              <input type="number" class="input-num input-preset" data-preset-input="2" min="100" max="450" step="5" value="300" title="CH2 Temperatur (100..450 °C)" />
+            </div>
+            <div class="preset-slot">
+              <button class="btn btn-preset" data-preset="3">CH3 · 350°C</button>
+              <input type="number" class="input-num input-preset" data-preset-input="3" min="100" max="450" step="5" value="350" title="CH3 Temperatur (100..450 °C)" />
+            </div>
           </div>
 
           <div class="btn-row-3">

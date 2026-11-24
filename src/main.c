@@ -144,6 +144,36 @@ static heater_cmd_err_t proto_select_preset_cb(uint8_t idx_1_to_3, uint16_t *out
     return err;
 }
 
+static heater_cmd_err_t proto_set_preset_cb(uint8_t idx_1_to_3, uint16_t temp_c, void *user) {
+    app_ctx_t *app = (app_ctx_t *)user;
+    if (app == NULL || idx_1_to_3 < 1u || idx_1_to_3 > 3u) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    if (temp_c < TEMP_MIN_C || temp_c > TEMP_MAX_C) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    uint8_t idx = (uint8_t)(idx_1_to_3 - 1u);
+    app->settings.presets_c[idx] = temp_c;
+    if (app->active_preset == idx) {
+        heater_cmd_err_t err = heater_set_target(temp_c);
+        if (err == HEATER_CMD_OK) {
+            app->settings.target_c = temp_c;
+        }
+    } else {
+        app->active_preset = find_preset_index(&app->settings, app->hst.target_c);
+    }
+    heater_get_status(&app->hst);
+    return HEATER_CMD_OK;
+}
+
+static void proto_get_presets_cb(uint16_t out_c[3], void *user) {
+    const app_ctx_t *app = (const app_ctx_t *)user;
+    if (app == NULL || out_c == NULL) return;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        out_c[i] = app->settings.presets_c[i];
+    }
+}
+
 static heater_cmd_err_t proto_set_sleep_cb(uint8_t enable, uint16_t sleep_temp_c, uint8_t update_temp, void *user) {
     app_ctx_t *app = (app_ctx_t *)user;
     heater_cmd_err_t err = heater_set_sleep(enable, sleep_temp_c, update_temp);
@@ -374,6 +404,8 @@ int main(void) {
         .set_heater = proto_set_heater_cb,
         .set_target = proto_set_target_cb,
         .select_preset = proto_select_preset_cb,
+        .set_preset = proto_set_preset_cb,
+        .get_presets = proto_get_presets_cb,
         .set_sleep = proto_set_sleep_cb,
         .set_cal = proto_set_cal_cb,
         .set_cal_point = proto_set_cal_point_cb,

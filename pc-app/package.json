@@ -1,6 +1,6 @@
 {
   "name": "opendws-200-studio",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenDWS-200 Desktop Studio (Live Telemetry, Control, CSV Logger & Firmware Updater)",
   "main": "src/main.js",
   "scripts": {
