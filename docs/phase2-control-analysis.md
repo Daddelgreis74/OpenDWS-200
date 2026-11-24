@@ -1,56 +1,56 @@
-# Phase-2 Reverse-Engineering-Analyse (`APP_DWS_200_V1.5_250922.bin`)
+# Phase-2 Reverse-Engineering Analysis (`APP_DWS_200_V1.5_250922.bin`)
 
-Diese Spezifikation dokumentiert die aus der offiziellen Stock-Firmware `APP_DWS_200_V1.5_250922.bin` (Artery `AT32F415RCT7`, App-Basis `0x08006000`) verifizierte Heizungs-, Mess-, Griff-Umschalt-, PID- und Sicherheitsarchitektur als direkte Basis für OpenDWS-200 Phase 2.
-
----
-
-## 1. Timer- & Blanking-Architektur (`TMR1` + `TMR2`)
-
-Die DWS-200 nutzt in der Stock-Firmware **kein AC-Zero-Crossing**, sondern eine **DC-gepulste `10 ms` (`100 Hz`) Heiz- und Mess-Zeitscheibe** über zwei Hardware-Timer:
-
-### 1.1 `TMR1` – `1,000 ms` Scheduler (`0x08014ab4`, `TMR1_OVF_IRQHandler` @ `0x080098f8`)
-
-- **Konfiguration:** `144 MHz / (143 + 1) = 1 MHz` Zähltakt, Periode `PR = 999` → **`1,000 ms` (`1 kHz`)** Überlauf-Interrupt (IRQ 25).
-- **10-Slot Round-Robin (`slot = counter % 10`, Gesamtzyklus `10 ms` / `100 Hz`):**
-  - **Slot 0 (`t = 0 ms`, `0x080123b0`):** Tastenabfrage (`0x080114dc`), Griff-Erkennung (`PB6` → `PC13..PC15`, `0x08011898`), Schlafständer (`PB5`, `0x08011310`), Soft-Power-Überwachung (`PB0`/`PB1`, `0x08011834`).
-  - **Slot 1 (`t = 1 ms`, `0x08009960`):** Ruft `Heater_Ctrl(0)` (`0x08012cfc`) auf → **schaltet `PA2` zwingend `LOW`**. Damit beginnt das **Blanking-Fenster** (Entkopplung von Heizstrom und Thermospannung).
-  - **Slot 2 (`t = 2 ms`, `0x080113a4`):** Exakt **`1,0 ms` nach `PA2 = LOW`** → Thermoelement `PC0` einlesen (`0x0800fd84`), Open-Tip-Prüfung (`tip_adc > 4000`), inkrementellen PID berechnen (`0x080129f0`), Heizpuls für diesen `10 ms`-Zyklus starten (`0x08012cfc`).
-  - **Slot 3 (`t = 3 ms`, `0x080123c8`):** Sleep-/Standby-Countdown (`6000 × 10 ms` Faktor, `0x1770`) und Buzzer-Abschalt-Timer.
-  - **Slot 4 (`t = 4 ms`, `0x0801196c`):** Alle 50 Zyklen (`500 ms`) `PA3` (`ADC1_CH3`) messen → `V_rail = (adc * 3.3 / 4095.0) * 16.0` (24-V-Versorgungsschiene; auf echter Station verifiziert: `1,434 V × 16 = 22,94 V` am Netz, `0,145 V × 16 = 2,32 V` bei reinem USB-Betrieb).
-  - **Slot 5 (`t = 5 ms`, `0x08009988`):** `PC1` (`ADC1_CH11`) Hall-Stromsensor einlesen → `I = |(adc * 3.3 / 4095.0 - 1.65) / 0.066|`. Wenn `I > 5,0 A`, wird ein Integrator hochgezählt (`3000` Zyklen = `30 s` → Dauerüberlast-Fault `[0x20000340 + 0x22] = 1`).
-
-### 1.2 `TMR2` – `91 µs` Pulsbreiten- & Überstrom-Timer (`0x08014b18`, `TMR2_IRQHandler` @ `0x08009a68`)
-
-- **Konfiguration:** `144 MHz / (143 + 1) = 1 MHz` Zähltakt, Periode `PR = 90` (`0x5A`) → **`91 µs`** (`~10,99 kHz`, IRQ 28).
-- **Puls-Ende:** Dekrementiert die verbleibenden Heiz-Ticks (`[0x20000340 + 0x3d]`). Bei `0` wird sofort `PA2 = LOW` (`0x08009bb0`) gesetzt (`Heizung AUS`).
-- **Kurzschluss- & Lasterkennung (`0x08009abc`):** Exakt **4 Ticks (`364 µs`) nach Pulsstart** (`remaining == initial - 4`) wird `PC1` (`ADC1_CH11`) gemessen und `I` berechnet:
-  - Sofortige Notabschaltung bei Kurzschluss/Überstrom (`[0x20000340 + 0x23] = 1`):
-    - **`handle_type == 1`:** `I > 10,0 A` (`0x40240000`)
-    - **`handle_type == 0`:** `I > 15,0 A` (`0x402E0000`)
-  - Lasterkennung für PID-Parametersatz (`[0x20000340 + 0x24]`): `I < 5,0 A` (`0x40140000`) setzt `flag24 = 1`.
+This specification documents the heating, sensing, handle-switching, PID control, and protection architecture verified from stock firmware `APP_DWS_200_V1.5_250922.bin` (Artery `AT32F415RCT7`, app base `0x08006000`) as the direct foundation for OpenDWS-200 Phase 2.
 
 ---
 
-## 2. Griff-Erkennung (`PB6`) & Bereichsumschaltung (`PC13`, `PC14`, `PC15`)
+## 1. Timer & Blanking Architecture (`TMR1` + `TMR2`)
 
-- `Stand_Read` (`0x080146d0`) liest `PB5` (Sleep-Ablage), `Handle_Read` (`0x08006c74`) liest `PB6`.
-- `Sleep_Stand_0x08011310` entprellt `PB6` über `5` Zyklen (`50 ms`) und schaltet drei Analog-Mux-/Verstärker-Steuerleitungen (`PC13`, `PC14`, `PC15`) um. Gleichzeitig wird der PID für `100` Zyklen (`1,0 s`, `[0x20000028 + 5] = 100`) pausiert (`0x08011360`), damit sich die Thermoelement-Eingangsstufe einschwingen kann:
+Stock DWS-200 does **not** use AC zero-crossing; instead it runs a **DC-pulsed `10 ms` (`100 Hz`) heating and measurement time slice** driven by two hardware timers:
 
-| Zustand `PB6` | Stock `handle_type` / Griff | `PC13` | `PC14` | `PC15` | Anmerkung |
+### 1.1 `TMR1` – `1.0 ms` Scheduler (`0x08014ab4`, `TMR1_OVF_IRQHandler` @ `0x080098f8`)
+
+- **Configuration:** `144 MHz / (143 + 1) = 1 MHz` counter clock, period `PR = 999` → **`1.0 ms` (`1 kHz`)** overflow interrupt (IRQ 25).
+- **10-Slot Round-Robin (`slot = counter % 10`, full period `10 ms` / `100 Hz`):**
+  - **Slot 0 (`t = 0 ms`, `0x080123b0`):** Key scan (`0x080114dc`), handle detect (`PB6` → `PC13..PC15`, `0x08011898`), sleep stand (`PB5`, `0x08011310`), soft-power check (`PB0`/`PB1`, `0x08011834`).
+  - **Slot 1 (`t = 1 ms`, `0x08009960`):** Calls `Heater_Ctrl(0)` (`0x08012cfc`) → **forces `PA2 = LOW`**, starting the **blanking window** so heater current settles cleanly before thermocouple sampling.
+  - **Slot 2 (`t = 2 ms`, `0x080113a4`):** Exactly **`1.0 ms` after `PA2 = LOW`** → read thermocouple `PC0` (`0x0800fd84`), open-tip check (`tip_adc > 4000`), run incremental PID (`0x080129f0`), and fire the new heater pulse (`0x08012cfc`).
+  - **Slot 3 (`t = 3 ms`, `0x080123c8`):** Sleep/standby countdown (`6000 × 10 ms` factor, `0x1770`) and buzzer stop timer.
+  - **Slot 4 (`t = 4 ms`, `0x0801196c`):** Every 50 cycles (`500 ms`), sample `PA3` (`ADC1_CH3`) → `V_rail = (adc * 3.3 / 4095.0) * 16.0` (`24 V` rail; verified on real hardware: `1.434 V × 16 = 22.94 V` on mains, `0.145 V × 16 = 2.32 V` on USB power).
+  - **Slot 5 (`t = 5 ms`, `0x08009988`):** Sample `PC1` (`ADC1_CH11`) Hall current sensor → `I = |(adc * 3.3 / 4095.0 - 1.65) / 0.066|`. If `I > 5.0 A`, increments sustained overload counter (`3000` ticks = `30 s` → fault `[0x20000340 + 0x22] = 1`).
+
+### 1.2 `TMR2` – `91 µs` Pulse Width & Overcurrent Timer (`0x08014b18`, `TMR2_IRQHandler` @ `0x08009a68`)
+
+- **Configuration:** `144 MHz / (143 + 1) = 1 MHz` counter clock, period `PR = 90` (`0x5A`) → **`91 µs`** (`~10.99 kHz`, IRQ 28).
+- **Pulse Cutoff:** Decrements remaining pulse ticks (`[0x20000340 + 0x3d]`) and drives `PA2 = LOW` (`0x08009bb0`) upon reaching `0`.
+- **Short-Circuit & Load Sensing (`0x08009abc`):** Exactly **4 ticks (`364 µs`) after pulse start** (`remaining == initial - 4`), samples `PC1` (`ADC1_CH11`) and computes `I`:
+  - Immediate emergency shutdown (`[0x20000340 + 0x23] = 1`):
+    - **`handle_type == 1`:** `I > 10.0 A` (`0x40240000`)
+    - **`handle_type == 0`:** `I > 15.0 A` (`0x402E0000`)
+  - PID parameter set selection (`[0x20000340 + 0x24]`): `I < 5.0 A` (`0x40140000`) sets `flag24 = 1`.
+
+---
+
+## 2. Handle Detection (`PB6`) & Gain/Mux Switching (`PC13`, `PC14`, `PC15`)
+
+- `Stand_Read` (`0x080146d0`) samples `PB5`; `Handle_Read` (`0x08006c74`) samples `PB6`.
+- `Sleep_Stand_0x08011310` debounces `PB6` over `5` cycles (`50 ms`), switches analog mux lines `PC13`, `PC14`, `PC15`, and locks the PID for `100` cycles (`1.0 s`, `[0x20000028 + 5] = 100`) via `0x08011360` while the thermocouple front-end settles:
+
+| `PB6` State | Stock `handle_type` / Handle | `PC13` | `PC14` | `PC15` | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`PB6 == 1`** | `1` — **`F245`** *(am Gerät bestätigt)* | `LOW` | `HIGH` | `LOW` | `200 W`-Bereich, Max-Duty `80..90` Ticks, Überstrom `10,0 A` |
-| **`PB6 == 0`** | `0` — **`F210`** | `HIGH` | `LOW` | `HIGH` | Hart begrenzt auf `30` Ticks (`2,73 ms`), Überstrom `15,0 A` |
+| **`PB6 == 1`** | `1` — **`F245`** *(hardware verified)* | `LOW` | `HIGH` | `LOW` | `200 W` range, max duty `80..90` ticks, overcurrent `10.0 A` |
+| **`PB6 == 0`** | `0` — **`F210`** | `HIGH` | `LOW` | `HIGH` | Hard-capped at `30` ticks (`2.73 ms`), overcurrent `15.0 A` |
 
 > [!NOTE]
-> Die Zuordnung **`PB6 == 1` = `F245`** wurde direkt am angeschlossenen Handgriff auf der echten Station bestätigt. Beim Boot und jedem Griffwechsel (`50 ms` entprellt) schaltet `OpenDWS-200` `PC13..PC15` (nach `PWC_CTRL.BPWEN` + `CRM_BPDC.LEXTEN=0`) um und erzwingt `1,0 s` Heizsperre zum Einschwingen der Eingangsstufe.
+> The mapping **`PB6 == 1` = `F245`** was verified on the real station. At boot and on every debounced handle change (`50 ms`), OpenDWS-200 configures `PC13..PC15` (after unlocking backup domain `PWC_CTRL.BPWEN` + `CRM_BPDC.LEXTEN=0`) and enforces a `1.0 s` settling lockout.
 
 ---
 
-## 3. Thermoelement-Kennlinien (`PC0` / `ADC1_CH10` → °C, `0x0800fd84`)
+## 3. Thermocouple Lookup Tables (`PC0` / `ADC1_CH10` → °C, `0x0800fd84`)
 
-Nach `1,0 ms` Heizpause liest `0x0800fd84` `ADC1_CH10` (`PC0`, `tip_adc`) und rechnet über eine **5-Segment stückweise lineare Interpolation** mit 3-Punkt-Kalibrierung (`150 °C`, `250 °C`, `350 °C`, wobei `450 °C` den `350 °C`-Offset erbt) plus den festen **Stock-V1.5-Kaltstellen-Offset `+25,0 °C`** (`0x0801243E` / `0x08012A30` / `0x08012F0A`) um; für PID (`0,1 °C`) läuft ein EMA-Filter (`alpha = 0,2`), für die Stations-/PC-Anzeige zusätzlich ein geglätteter Ganzzahlfilter mit `±0,7 °C`-Hysterese:
+After the `1.0 ms` blanking pause, `0x0800fd84` samples `ADC1_CH10` (`PC0`, `tip_adc`) and converts via **5-segment piecewise-linear interpolation** with 3-point calibration (`150 °C`, `250 °C`, `350 °C`, where `450 °C` shares the `350 °C` offset) plus the fixed **stock V1.5 cold-junction baseline `+25.0 °C`** (`0x0801243E` / `0x08012A30` / `0x08012F0A`). PID control (`0.1 °C`) uses an EMA filter (`alpha = 0.2`), while TFT and PC Studio displays apply an additional smoothed whole-degree filter with `±0.7 °C` hysteresis:
 
-| Stützpunkt | `handle_type == 1` (`PB6 == 1`) | `handle_type == 0` (`PB6 == 0`) |
+| Knot | `handle_type == 1` (`PB6 == 1`) | `handle_type == 0` (`PB6 == 0`) |
 | :--- | :--- | :--- |
 | `0 °C` (+`25 °C` CJ) | `0 raw` (`0 mV`) | `0 raw` (`0 mV`) |
 | `150 °C` (+`25 °C` CJ) | `1100 raw` (`0x044C`, `~886 mV`) | `276 raw` (`0x0114`, `~222 mV`) |
@@ -58,39 +58,39 @@ Nach `1,0 ms` Heizpause liest `0x0800fd84` `ADC1_CH10` (`PC0`, `tip_adc`) und re
 | `350 °C` (+`25 °C` CJ) | `2610 raw` (`0x0A32`, `~2103 mV`) | `882 raw` (`0x0372`, `~711 mV`) |
 | `450 °C` (+`25 °C` CJ) | `3340 raw` (`0x0D0C`, `~2692 mV`) | `1210 raw` (`0x04BA`, `~975 mV`) |
 
-*(Die Stock-Firmware addiert nach der LUT-Interpolation stets `+25 °C` Kaltstellen-Basiswert (`25 °C` bei `0 raw`), sodass gemessene `11..25 raw` bei Raumtemperatur exakt plausible `~26,5..28,4 °C` ergeben.)*
+*(Stock firmware always adds the `+25 °C` cold-junction baseline after LUT interpolation (`25 °C` at `0 raw`), so measured room-temperature readings of `11..25 raw` correspond to `~26.5..28.4 °C`.)*
 
 ---
 
-## 4. Inkrementeller PID-Regler & Duty-Begrenzung (`0x080129f0`, `0x08012cfc`)
+## 4. Incremental PID Controller & Duty Limits (`0x080129f0`, `0x08012cfc`)
 
-Der Regler arbeitet alle `10 ms` als inkrementeller PID (`err = target_temp - tip_temp`) mit Bang-Bang-Schwellen:
+The controller executes every `10 ms` as an incremental PID (`err = target_temp - tip_temp`) with bang-bang thresholds:
 
-- **Bang-Bang-Grenzen:**
-  - `err > +50 °C` (`0x40490000`) → `100 %` (durch aktives Duty-Cap begrenzt)
-  - `err < -5 °C` (`0xC0140000`) → `0 %` (`PA2` aus)
-- **PID-Parameter (`Kp`, `Ki`, `Kd`) und Puls-Limits (`1 Tick = 91 µs`):**
+- **Bang-Bang Limits:**
+  - `err > +50 °C` (`0x40490000`) → `100 %` (clamped by active duty cap)
+  - `err < -5 °C` (`0xC0140000`) → `0 %` (`PA2` off)
+- **PID Gains (`Kp`, `Ki`, `Kd`) & Pulse Limits (`1 tick = 91 µs`):**
 
-| Modus | Bedingung | `Kp` | `Ki` | `Kd` | Max. Pulsdauer / `10 ms` |
+| Mode | Condition | `Kp` | `Ki` | `Kd` | Max Pulse Width / `10 ms` |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `handle_type == 1` | Last `I >= 5 A` (`flag24 == 0`) | `2,28` | `0,92` | `0,28` | `80` Ticks (`7,28 ms`) bei `T < 100 °C`, sonst `100` (eff. `~9,0 ms` bis Slot 1) |
-| `handle_type == 1` | Kleine Last `I < 5 A` (`flag24 == 1`) | `2,48` | `0,015` | `0,02` | wie oben |
-| `handle_type == 0` | `T <= 150 °C` | `0,30` | `0,02` | `0,01` | Hart begrenzt auf `30` Ticks (`2,73 ms` ≈ `27,3 %`) |
-| `handle_type == 0` | `T > 150 °C` | `0,40` | `0,02` | `0,01` | Hart begrenzt auf `30` Ticks (`2,73 ms`) |
-| `handle_type == 0` | `T > 250 °C` | `0,50` | `0,02` | `0,01` | Hart begrenzt auf `30` Ticks (`2,73 ms`) |
-| `handle_type == 0` | `T > 350 °C` | `0,60` | `0,02` | `0,01` | Hart begrenzt auf `30` Ticks (`2,73 ms`) |
+| `handle_type == 1` | Load `I >= 5 A` (`flag24 == 0`) | `2.28` | `0.92` | `0.28` | `80` ticks (`7.28 ms`) for `T < 100 °C`, else `100` (eff. `~9.0 ms` before Slot 1) |
+| `handle_type == 1` | Light load `I < 5 A` (`flag24 == 1`) | `2.48` | `0.015` | `0.02` | same as above |
+| `handle_type == 0` | `T <= 150 °C` | `0.30` | `0.02` | `0.01` | Hard-capped at `30` ticks (`2.73 ms` ≈ `27.3 %`) |
+| `handle_type == 0` | `T > 150 °C` | `0.40` | `0.02` | `0.01` | Hard-capped at `30` ticks (`2.73 ms`) |
+| `handle_type == 0` | `T > 250 °C` | `0.50` | `0.02` | `0.01` | Hard-capped at `30` ticks (`2.73 ms`) |
+| `handle_type == 0` | `T > 350 °C` | `0.60` | `0.02` | `0.01` | Hard-capped at `30` ticks (`2.73 ms`) |
 
 ---
 
-## 5. Sicherheits-, Power- & Peripheriefunktionen
+## 5. Protection, Power & Peripherals
 
-- **Open-Tip / Spitzen-Wechsel (`0x08011400`):** `tip_adc > 4000` (`0x0FA0`) meldet „keine Spitze“ und sperrt die Heizung sofort. Nach Wiedereinstecken wartet die Firmware `50` Zyklen (`500 ms`), gibt dann zunächst einen **`5`-Tick-Prüfpuls (`455 µs`)** (`0x0801143e`) ab, um auf Kurzschluss zu testen (`364 µs`-Messung in `TMR2`), und schaltet erst danach den normalen PID frei.
-- **Kurzschluss- & Dauerüberlastschutz:** Sofortabschaltung im `TMR2` bei `I > 10 A` (`handle_type 1`) bzw. `> 15 A` (`handle_type 0`) sowie `30 s`-Dauerüberlastschutz (`I > 5 A`).
-- **Soft-Power-Latch (`PB0` / `PB1`, `0x08011834`):** `PB1` hält das System eingeschaltet (`HIGH`). Nach einer `PB0`-Flankensequenz schaltet die Station `PB1` auf `LOW`.
-- **I2C-Nebenbus (`PB10` / `PB11`, `0x08014304`):** Bit-Bang-I2C an Slave-Adresse `0x78` (optionales Power-/Display-IC; in Phase 1 nicht benötigt).
-- **Flash-Settings (`0x0803F800`):** `200` Bytes (`0x64` Halfwords, Stock-Magic `0x001F` am Offset `0x00`), inklusive getrennter 3-Punkt-Kalibrier-Offsets für `handle_type 1` (`+0x18..+0x1C`) und `handle_type 0` (`+0x2E..+0x32`, jeweils `0x8000 - val`).
-- **Zusätzliche Sicherheitsregeln für OpenDWS-200 Phase 2:**
-  1. Hardware-Watchdog (`WDT` ~2 s) erzwingt im Fehler-/Hängerfall Reset mit sofortigem `PA2 = LOW` ab Instruktion 1.
-  2. **24-V-Rail-Sperre (`PA3`):** Heizung bleibt strikt blockiert, solange `V_rail < 15 V` (verhindert Heizversuche im reinen USB-5-V-Versorgungsbetrieb).
-  3. **Auto-Nullpunkt für Hall-Sensor (`PC1`):** Beim Start und im Leerlauf (`heater == 0`) aktuellen Ruhe-Offset einmessen (auf echter Hardware: `~1642 mV` statt ideal `1650 mV`).
-  4. **Absolutes Software-Limit:** Harte Abschaltung bei `T > 480 °C`, fehlendem Griff-Signal oder Überschreiten der maximalen Einschaltdauer ohne Temperaturanstieg (*Thermal Runaway Protection*).
+- **Open-Tip / Cartridge Swap (`0x08011400`):** `tip_adc > 4000` (`0x0FA0`) reports missing cartridge and cuts heater drive immediately. Upon re-insertion, firmware waits `50` cycles (`500 ms`), fires a single **`5`-tick probe pulse (`455 µs`)** (`0x0801143e`) to check for shorts (`364 µs` sample in `TMR2`), and then re-enables PID control.
+- **Short-Circuit & Sustained Overload Protection:** Instant cutoff in `TMR2` at `I > 10 A` (`handle_type 1`) or `> 15 A` (`handle_type 0`) plus `30 s` sustained overload trip (`I > 5 A`).
+- **Soft-Power Latch (`PB0` / `PB1`, `0x08011834`):** `PB1` holds the system powered (`HIGH`); a `PB0` button sequence drops `PB1 = LOW`.
+- **Auxiliary I2C (`PB10` / `PB11`, `0x08014304`):** Bit-banged I2C for slave address `0x78`.
+- **Flash Settings (`0x0803F800`):** `200` bytes (`0x64` halfwords in stock, magic `0x001F`, including separate 3-point calibration offsets for `handle_type 1` and `handle_type 0`).
+- **OpenDWS-200 Phase-2 Additional Safety Guarantees:**
+  1. Hardware watchdog (`WDT` ~2 s) resets on hang with `PA2 = LOW` from instruction 1.
+  2. **`24 V` Rail Lockout (`PA3`):** Heating stays strictly blocked while `V_rail < 15 V` (prevents heating attempts on `5 V` USB power).
+  3. **Hall Sensor Auto-Zero (`PC1`):** Samples idle offset while `heater == 0` (`~1642 mV` measured vs ideal `1650 mV`).
+  4. **Absolute Software Cutoff:** Immediate fault trip above `480 °C`, missing handle signal, or *Thermal Runaway* (`8 s` at high duty without temperature rise).
