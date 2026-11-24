@@ -39,8 +39,10 @@ void settings_defaults(opendws_settings_t *out) {
     out->presets_c[1] = 300u;
     out->presets_c[2] = 350u;
     out->sleep_temp_c = SLEEP_TEMP_DEFAULT_C;
-    out->cal_f245_deci_c = 0;
-    out->cal_f210_deci_c = 0;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        out->cal_f245_dc[i] = 0;
+        out->cal_f210_dc[i] = 0;
+    }
     out->stream_interval_ms = STREAM_DEFAULT_MS;
     out->sleep_en = 1u;
     out->backlight_pct = 80u;
@@ -62,8 +64,10 @@ void settings_finalize(opendws_settings_t *s) {
     if (s->sleep_temp_c != 0u) {
         s->sleep_temp_c = clamp_u16(s->sleep_temp_c, (uint16_t)SLEEP_TEMP_MIN_C, (uint16_t)SLEEP_TEMP_MAX_C);
     }
-    s->cal_f245_deci_c = clamp_i16(s->cal_f245_deci_c, (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
-    s->cal_f210_deci_c = clamp_i16(s->cal_f210_deci_c, (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        s->cal_f245_dc[i] = clamp_i16(s->cal_f245_dc[i], (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
+        s->cal_f210_dc[i] = clamp_i16(s->cal_f210_dc[i], (int16_t)(CAL_OFFSET_MIN_C * 10), (int16_t)(CAL_OFFSET_MAX_C * 10));
+    }
     s->stream_interval_ms = clamp_u16(s->stream_interval_ms, (uint16_t)STREAM_MIN_MS, (uint16_t)STREAM_MAX_MS);
     s->sleep_en = s->sleep_en ? 1u : 0u;
     if (s->backlight_pct < 10u) {
@@ -78,6 +82,8 @@ void settings_finalize(opendws_settings_t *s) {
         s->auto_off_min = AUTO_OFF_MAX_MIN;
     }
     s->reserved[0] = 0u;
+    s->reserved[1] = 0u;
+    s->reserved[2] = 0u;
     s->crc32 = settings_crc32(s, offsetof(opendws_settings_t, crc32));
 }
 
@@ -100,13 +106,15 @@ int settings_validate(const opendws_settings_t *s) {
         (s->sleep_temp_c < SLEEP_TEMP_MIN_C || s->sleep_temp_c > SLEEP_TEMP_MAX_C)) {
         return 0;
     }
-    if (s->cal_f245_deci_c < (int16_t)(CAL_OFFSET_MIN_C * 10) ||
-        s->cal_f245_deci_c > (int16_t)(CAL_OFFSET_MAX_C * 10)) {
-        return 0;
-    }
-    if (s->cal_f210_deci_c < (int16_t)(CAL_OFFSET_MIN_C * 10) ||
-        s->cal_f210_deci_c > (int16_t)(CAL_OFFSET_MAX_C * 10)) {
-        return 0;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        if (s->cal_f245_dc[i] < (int16_t)(CAL_OFFSET_MIN_C * 10) ||
+            s->cal_f245_dc[i] > (int16_t)(CAL_OFFSET_MAX_C * 10)) {
+            return 0;
+        }
+        if (s->cal_f210_dc[i] < (int16_t)(CAL_OFFSET_MIN_C * 10) ||
+            s->cal_f210_dc[i] > (int16_t)(CAL_OFFSET_MAX_C * 10)) {
+            return 0;
+        }
     }
     if (s->backlight_pct < 10u || s->backlight_pct > 100u) {
         return 0;

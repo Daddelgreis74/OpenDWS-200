@@ -13,12 +13,14 @@ typedef enum {
     MENU_ITEM_PRESET1     = 4,
     MENU_ITEM_PRESET2     = 5,
     MENU_ITEM_PRESET3     = 6,
-    MENU_ITEM_CAL         = 7,
-    MENU_ITEM_BACKLIGHT   = 8,
-    MENU_ITEM_BUZZER      = 9,
-    MENU_ITEM_STREAM      = 10,
-    MENU_ITEM_SAVE        = 11,
-    MENU_ITEM_COUNT       = 12
+    MENU_ITEM_CAL_150     = 7,
+    MENU_ITEM_CAL_250     = 8,
+    MENU_ITEM_CAL_350     = 9,
+    MENU_ITEM_BACKLIGHT   = 10,
+    MENU_ITEM_BUZZER      = 11,
+    MENU_ITEM_STREAM      = 12,
+    MENU_ITEM_SAVE        = 13,
+    MENU_ITEM_COUNT       = 14
 } menu_item_t;
 
 #define MENU_VISIBLE_ROWS 6u

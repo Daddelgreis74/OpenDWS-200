@@ -156,6 +156,31 @@ int main(void) {
     }
     assert(non_black == (uint32_t)LCD_WIDTH * (uint32_t)LCD_HEIGHT);
 
+    /* Verify display temperature smoothing + hysteresis filter eliminates flicker */
+    ui_temp_filter_t tf;
+    ui_temp_filter_init(&tf);
+    assert(ui_temp_filter_step(&tf, 2998, 300u, 1u) == 300);
+    const int32_t jitter[6] = { 2995, 3005, 2992, 3008, 2996, 3004 };
+    for (uint32_t i = 0u; i < 6u; ++i) {
+        assert(ui_temp_filter_step(&tf, jitter[i], 300u, 1u) == 300);
+    }
+
+    /* Fast ramp (>= 3.0 C jump) responds quickly without sluggish lag */
+    ui_temp_filter_init(&tf);
+    assert(ui_temp_filter_step(&tf, 250, 0u, 0u) == 25);
+    assert(ui_temp_filter_step(&tf, 1500, 0u, 0u) >= 85);
+
+    /* Hysteresis (+/-0.7 C) prevents 250 <-> 251 chatter around midpoint */
+    ui_temp_filter_init(&tf);
+    assert(ui_temp_filter_step(&tf, 2500, 0u, 0u) == 250);
+    for (uint32_t i = 0u; i < 10u; ++i) {
+        assert(ui_temp_filter_step(&tf, 2505, 0u, 0u) == 250);
+    }
+    for (uint32_t i = 0u; i < 20u; ++i) {
+        (void)ui_temp_filter_step(&tf, 2520, 0u, 0u);
+    }
+    assert(ui_temp_filter_step(&tf, 2520, 0u, 0u) == 252);
+
     printf("test_ui: PASS\n");
     return 0;
 }

@@ -51,6 +51,7 @@ uint32_t sensors_adc_to_mv(uint16_t raw);
 uint32_t sensors_rail_adc_to_mv(uint16_t aux_raw);
 int32_t sensors_cur_adc_to_ma(uint16_t raw);
 int32_t sensors_cur_adc_to_ma_zero(uint16_t raw, uint16_t zero_mv);
+int32_t sensors_tip_adc_to_deci_c_3pt(uint16_t raw, uint8_t is_f245, const int16_t cal_dc[3]);
 int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_offset_deci_c);
 
 void sensors_filter_init(sensor_filter_t *f);

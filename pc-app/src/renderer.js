@@ -30,6 +30,38 @@
     localBin: null,
   };
 
+  const tempFilter = {
+    initialized: false,
+    filteredC: 0,
+    shownC: 0,
+  };
+
+  function resetTempDisplayFilter() {
+    tempFilter.initialized = false;
+    tempFilter.filteredC = 0;
+    tempFilter.shownC = 0;
+  }
+
+  function smoothDisplayTempC(rawC, activeTargetC, settledMode) {
+    const c = Math.max(0, Number(rawC) || 0);
+    if (!tempFilter.initialized) {
+      tempFilter.filteredC = c;
+      tempFilter.shownC = Math.round(c);
+      tempFilter.initialized = true;
+    } else if (Math.abs(c - tempFilter.filteredC) >= 3.0) {
+      tempFilter.filteredC = (tempFilter.filteredC + c) / 2;
+    } else {
+      tempFilter.filteredC = (tempFilter.filteredC * 5 + c) / 6;
+    }
+
+    if (settledMode && activeTargetC > 0 && Math.abs(tempFilter.filteredC - activeTargetC) <= 1.0) {
+      tempFilter.shownC = Math.round(activeTargetC);
+    } else if (Math.abs(tempFilter.filteredC - tempFilter.shownC) >= 0.7) {
+      tempFilter.shownC = Math.round(tempFilter.filteredC);
+    }
+    return tempFilter.shownC;
+  }
+
   const el = {
     connDot: document.getElementById('connDot'),
     mcuLabel: document.getElementById('mcuLabel'),
@@ -66,8 +98,13 @@
     btnSleepOff: document.getElementById('btnSleepOff'),
     inputSleepTemp: document.getElementById('inputSleepTemp'),
     btnSetSleepTemp: document.getElementById('btnSetSleepTemp'),
-    inputCal: document.getElementById('inputCal'),
-    btnSetCal: document.getElementById('btnSetCal'),
+    calHandleBadge: document.getElementById('calHandleBadge'),
+    inputCal150: document.getElementById('inputCal150'),
+    inputCal250: document.getElementById('inputCal250'),
+    inputCal350: document.getElementById('inputCal350'),
+    btnSetCal150: document.getElementById('btnSetCal150'),
+    btnSetCal250: document.getElementById('btnSetCal250'),
+    btnSetCal350: document.getElementById('btnSetCal350'),
     sliderBl: document.getElementById('sliderBl'),
     valBl: document.getElementById('valBl'),
     selectStream: document.getElementById('selectStream'),
@@ -159,11 +196,31 @@
       el.badgeFault.classList.add('hidden');
     }
 
-    el.kpiTemp.textContent = stat.faultName === 'OPEN_TIP' ? 'OPEN!' : `${stat.tipC.toFixed(1)} °C`;
+    if (stat.faultName === 'OPEN_TIP') {
+      resetTempDisplayFilter();
+      el.kpiTemp.textContent = 'OPEN!';
+    } else {
+      const settled = stat.state === 'HEAT' || stat.state === 'SLEEP';
+      const dispC = smoothDisplayTempC(stat.tipC, stat.actC, settled);
+      el.kpiTemp.textContent = `${dispC} °C`;
+    }
     el.kpiTemp.className = `kpi-value ${
       stat.faultName === 'OPEN_TIP' || activeFault ? 'danger' : stat.state === 'SLEEP' ? 'cyan' : isReady ? 'ok' : 'amber'
     }`;
     el.kpiTarget.textContent = `Soll: ${stat.targetC} °C · Aktiv: ${stat.actC} °C`;
+
+    if (el.calHandleBadge) {
+      el.calHandleBadge.textContent = stat.handle;
+      el.calHandleBadge.className = `badge ${stat.handle === 'F245' ? 'badge-cyan' : 'badge-warn'}`;
+    }
+    if (Array.isArray(stat.cal) && stat.cal.length === 3) {
+      const calInputs = [el.inputCal150, el.inputCal250, el.inputCal350];
+      calInputs.forEach((input, idx) => {
+        if (input && document.activeElement !== input) {
+          input.value = String(stat.cal[idx]);
+        }
+      });
+    }
 
     el.kpiPower.textContent = `${stat.dutyPct} %`;
     el.dutyFill.style.width = `${Math.max(0, Math.min(100, stat.dutyPct))}%`;
@@ -393,6 +450,12 @@
       }
     } catch {}
 
+    resetTempDisplayFilter();
+    el.kpiTemp.textContent = '--- °C';
+    if (el.calHandleBadge) {
+      el.calHandleBadge.textContent = '---';
+      el.calHandleBadge.className = 'badge badge-muted';
+    }
     el.connDot.classList.remove('online');
     el.btnConnect.textContent = 'Verbinden';
     el.btnConnect.className = 'btn btn-primary';
@@ -636,7 +699,27 @@
   el.btnSleepOn.addEventListener('click', () => sendCommand('SLEEP ON'));
   el.btnSleepOff.addEventListener('click', () => sendCommand('SLEEP OFF'));
   el.btnSetSleepTemp.addEventListener('click', () => sendCommand(`SLEEP ${el.inputSleepTemp.value}`));
-  el.btnSetCal.addEventListener('click', () => sendCommand(`CAL ${el.inputCal.value}`));
+
+  const calPoints = [
+    { temp: 150, input: el.inputCal150, btn: el.btnSetCal150 },
+    { temp: 250, input: el.inputCal250, btn: el.btnSetCal250 },
+    { temp: 350, input: el.inputCal350, btn: el.btnSetCal350 },
+  ];
+  calPoints.forEach(({ temp, input, btn }) => {
+    if (btn && input) {
+      btn.addEventListener('click', () => sendCommand(`CAL ${temp} ${input.value}`));
+    }
+  });
+  document.querySelectorAll('.btn-cal-temp').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = Number.parseInt(btn.dataset.calTemp, 10);
+      if (Number.isFinite(t)) {
+        el.sliderTemp.value = String(t);
+        el.ctrlTargetBadge.textContent = `${t} °C`;
+        sendCommand(`TEMP ${t}`);
+      }
+    });
+  });
 
   el.sliderBl.addEventListener('input', () => {
     el.valBl.textContent = `${el.sliderBl.value}%`;

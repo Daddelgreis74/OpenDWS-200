@@ -2,7 +2,7 @@
 
 /* OpenDWS-200 Firmware Configuration (Phase 2 - Closed-Loop PID & Safety) */
 #ifndef OPENDWS_VERSION_STR
-#define OPENDWS_VERSION_STR "v0.2.7-phase2"
+#define OPENDWS_VERSION_STR "v0.3.0"
 #endif
 
 /* Phase 2: Heater enabled ONLY on explicit user command, ALWAYS boots in STANDBY (PA2 LOW). */
@@ -55,6 +55,7 @@
 #define AUTO_OFF_MAX_MIN        60u
 #define CAL_OFFSET_MIN_C        (-50)
 #define CAL_OFFSET_MAX_C        50
+#define TIP_COLD_JUNCTION_DECI_C 250   /* +25.0 C stock V1.5 cold-junction baseline */
 
 /* Hardware Protection & Blanking Constants (10 ms control period = 100 Hz) */
 #define RAIL_MIN_MV             15000u

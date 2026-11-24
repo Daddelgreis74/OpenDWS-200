@@ -39,7 +39,7 @@
         <div class="kpi-grid">
           <div class="card kpi-card">
             <div class="kpi-label">SPITZEN-TEMPERATUR</div>
-            <div class="kpi-value cyan" id="kpiTemp">---.- °C</div>
+            <div class="kpi-value cyan" id="kpiTemp">--- °C</div>
             <div class="kpi-meta" id="kpiTarget">Soll: --- °C · Aktiv: --- °C</div>
           </div>
           <div class="card kpi-card">
@@ -133,12 +133,29 @@
             </div>
           </div>
 
-          <div class="field-row">
-            <label for="inputCal">Kalibrierung (°C)</label>
-            <div class="inline-group">
-              <input type="number" id="inputCal" class="input-num" min="-50" max="50" step="1" value="0" />
-              <button class="btn btn-sm" id="btnSetCal">Set</button>
+          <div class="cal-box">
+            <div class="field-row">
+              <label>3-Punkt-Kalibrierung (°C)</label>
+              <span class="badge badge-muted" id="calHandleBadge">---</span>
             </div>
+            <div class="cal-grid">
+              <div class="cal-row">
+                <button class="btn btn-xs btn-cal-temp" data-cal-temp="150" title="Solltemperatur auf 150 °C setzen">150 °C</button>
+                <input type="number" id="inputCal150" class="input-num input-cal" min="-50" max="50" step="1" value="0" />
+                <button class="btn btn-sm" id="btnSetCal150">Set</button>
+              </div>
+              <div class="cal-row">
+                <button class="btn btn-xs btn-cal-temp" data-cal-temp="250" title="Solltemperatur auf 250 °C setzen">250 °C</button>
+                <input type="number" id="inputCal250" class="input-num input-cal" min="-50" max="50" step="1" value="0" />
+                <button class="btn btn-sm" id="btnSetCal250">Set</button>
+              </div>
+              <div class="cal-row">
+                <button class="btn btn-xs btn-cal-temp" data-cal-temp="350" title="Solltemperatur auf 350 °C setzen">350 °C</button>
+                <input type="number" id="inputCal350" class="input-num input-cal" min="-50" max="50" step="1" value="0" />
+                <button class="btn btn-sm" id="btnSetCal350">Set</button>
+              </div>
+            </div>
+            <div class="cal-hint">+ Wert senkt reale Spitze · danach SAVE FLASH</div>
           </div>
 
           <div class="field-row">

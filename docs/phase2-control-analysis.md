@@ -48,17 +48,17 @@ Die DWS-200 nutzt in der Stock-Firmware **kein AC-Zero-Crossing**, sondern eine 
 
 ## 3. Thermoelement-Kennlinien (`PC0` / `ADC1_CH10` → °C, `0x0800fd84`)
 
-Nach `1,0 ms` Heizpause liest `0x0800fd84` `ADC1_CH10` (`PC0`, `tip_adc`) und rechnet über eine **5-Segment stückweise lineare Interpolation** mit 4 Stützstellen (`150 °C`, `250 °C`, `350 °C`, `450 °C`) auf °C um (zusätzlich kalibrierbar über Flash-Offsets um `0x8000` aus `0x0803F800` + EMA-Filter `0x08014a70` mit `alpha = 0,2` + 40-Sample-Ringpuffer für die Anzeige):
+Nach `1,0 ms` Heizpause liest `0x0800fd84` `ADC1_CH10` (`PC0`, `tip_adc`) und rechnet über eine **5-Segment stückweise lineare Interpolation** mit 3-Punkt-Kalibrierung (`150 °C`, `250 °C`, `350 °C`, wobei `450 °C` den `350 °C`-Offset erbt) plus den festen **Stock-V1.5-Kaltstellen-Offset `+25,0 °C`** (`0x0801243E` / `0x08012A30` / `0x08012F0A`) um; für PID (`0,1 °C`) läuft ein EMA-Filter (`alpha = 0,2`), für die Stations-/PC-Anzeige zusätzlich ein geglätteter Ganzzahlfilter mit `±0,7 °C`-Hysterese:
 
 | Stützpunkt | `handle_type == 1` (`PB6 == 1`) | `handle_type == 0` (`PB6 == 0`) |
 | :--- | :--- | :--- |
-| `0 °C` | `0 raw` (`0 mV`) | `0 raw` (`0 mV`) |
-| `150 °C` | `1100 raw` (`0x044C`, `~886 mV`) | `276 raw` (`0x0114`, `~222 mV`) |
-| `250 °C` | `1870 raw` (`0x074E`, `~1507 mV`) | `608 raw` (`0x0260`, `~490 mV`) |
-| `350 °C` | `2610 raw` (`0x0A32`, `~2103 mV`) | `882 raw` (`0x0372`, `~711 mV`) |
-| `450 °C` | `3340 raw` (`0x0D0C`, `~2692 mV`) | `1210 raw` (`0x04BA`, `~975 mV`) |
+| `0 °C` (+`25 °C` CJ) | `0 raw` (`0 mV`) | `0 raw` (`0 mV`) |
+| `150 °C` (+`25 °C` CJ) | `1100 raw` (`0x044C`, `~886 mV`) | `276 raw` (`0x0114`, `~222 mV`) |
+| `250 °C` (+`25 °C` CJ) | `1870 raw` (`0x074E`, `~1507 mV`) | `608 raw` (`0x0260`, `~490 mV`) |
+| `350 °C` (+`25 °C` CJ) | `2610 raw` (`0x0A32`, `~2103 mV`) | `882 raw` (`0x0372`, `~711 mV`) |
+| `450 °C` (+`25 °C` CJ) | `3340 raw` (`0x0D0C`, `~2692 mV`) | `1210 raw` (`0x04BA`, `~975 mV`) |
 
-*(Im Bring-Up gemessener Raumtemperaturwert `11..25 raw` bei `PB6 = 1` entspricht damit plausiblen `~1,5..3,4 °C` über `0 °C`-Referenz bzw. Raum-/Kaltstellenbereich vor Null-Offset-Abgleich.)*
+*(Die Stock-Firmware addiert nach der LUT-Interpolation stets `+25 °C` Kaltstellen-Basiswert (`25 °C` bei `0 raw`), sodass gemessene `11..25 raw` bei Raumtemperatur exakt plausible `~26,5..28,4 °C` ergeben.)*
 
 ---
 

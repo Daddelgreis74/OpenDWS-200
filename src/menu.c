@@ -80,13 +80,16 @@ static uint32_t adjust_item(menu_item_t item, opendws_settings_t *s, uint8_t is_
         s->presets_c[idx] = step_u16(s->presets_c[idx], (int16_t)(dir * 5), (uint16_t)TEMP_MIN_C, (uint16_t)TEMP_MAX_C);
         return MENU_ACT_CHANGED_PRESET;
     }
-    case MENU_ITEM_CAL: {
-        int16_t *cal = is_f245 ? &s->cal_f245_deci_c : &s->cal_f210_deci_c;
-        int32_t cur_c = (int32_t)(*cal) / 10;
+    case MENU_ITEM_CAL_150:
+    case MENU_ITEM_CAL_250:
+    case MENU_ITEM_CAL_350: {
+        uint32_t cal_idx = (uint32_t)(item - MENU_ITEM_CAL_150);
+        int16_t *cal_arr = is_f245 ? s->cal_f245_dc : s->cal_f210_dc;
+        int32_t cur_c = (int32_t)cal_arr[cal_idx] / 10;
         cur_c += (int32_t)dir;
         if (cur_c < CAL_OFFSET_MIN_C) cur_c = CAL_OFFSET_MIN_C;
         if (cur_c > CAL_OFFSET_MAX_C) cur_c = CAL_OFFSET_MAX_C;
-        *cal = (int16_t)(cur_c * 10);
+        cal_arr[cal_idx] = (int16_t)(cur_c * 10);
         return MENU_ACT_CHANGED_CAL;
     }
     case MENU_ITEM_BACKLIGHT: {
@@ -198,7 +201,9 @@ const char *menu_item_label(menu_item_t item, uint8_t is_f245) {
     case MENU_ITEM_PRESET1:    return "Preset CH1";
     case MENU_ITEM_PRESET2:    return "Preset CH2";
     case MENU_ITEM_PRESET3:    return "Preset CH3";
-    case MENU_ITEM_CAL:        return is_f245 ? "Cal (F245)" : "Cal (F210)";
+    case MENU_ITEM_CAL_150:    return is_f245 ? "Cal 150 (F245)" : "Cal 150 (F210)";
+    case MENU_ITEM_CAL_250:    return is_f245 ? "Cal 250 (F245)" : "Cal 250 (F210)";
+    case MENU_ITEM_CAL_350:    return is_f245 ? "Cal 350 (F245)" : "Cal 350 (F210)";
     case MENU_ITEM_BACKLIGHT:  return "Backlight";
     case MENU_ITEM_BUZZER:     return "Buzzer";
     case MENU_ITEM_STREAM:     return "USB Stream";
@@ -256,8 +261,12 @@ void menu_format_value(
         (void)fmt_append_str(buf, p, cap, " C");
         break;
     }
-    case MENU_ITEM_CAL: {
-        int32_t cal_c = (int32_t)(is_f245 ? s->cal_f245_deci_c : s->cal_f210_deci_c) / 10;
+    case MENU_ITEM_CAL_150:
+    case MENU_ITEM_CAL_250:
+    case MENU_ITEM_CAL_350: {
+        uint32_t cal_idx = (uint32_t)(item - MENU_ITEM_CAL_150);
+        const int16_t *cal_arr = is_f245 ? s->cal_f245_dc : s->cal_f210_dc;
+        int32_t cal_c = (int32_t)cal_arr[cal_idx] / 10;
         fmt_int_pad(num, sizeof(num), cal_c, 1u, '0', 1u);
         p = fmt_append_str(buf, p, cap, num);
         (void)fmt_append_str(buf, p, cap, " C");

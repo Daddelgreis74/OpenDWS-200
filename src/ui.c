@@ -23,6 +23,65 @@
 
 static uint8_t g_rendered_screen_mode = 0u; /* 0 = MAIN, 1 = MENU, 2 = GRAPH */
 
+static int32_t abs_i32(int32_t v) {
+    return (v < 0) ? -v : v;
+}
+
+void ui_temp_filter_init(ui_temp_filter_t *f) {
+    if (f == NULL) return;
+    f->filtered_dc = 0;
+    f->shown_c = 0;
+    f->initialized = 0u;
+}
+
+int16_t ui_temp_filter_step(
+    ui_temp_filter_t *f,
+    int32_t raw_deci_c,
+    uint16_t active_target_c,
+    uint8_t settled_mode
+) {
+    if (raw_deci_c < 0) raw_deci_c = 0;
+    int16_t rounded = (int16_t)((raw_deci_c + 5) / 10);
+    if (f == NULL) return rounded;
+
+    if (f->initialized == 0u) {
+        f->filtered_dc = raw_deci_c;
+        f->shown_c = rounded;
+        f->initialized = 1u;
+    } else if (abs_i32(raw_deci_c - f->filtered_dc) >= 30) {
+        /* Track fast ramps (>= 3.0 C delta) quickly without lag */
+        f->filtered_dc = (f->filtered_dc + raw_deci_c) / 2;
+    } else {
+        /* Heavy smoothing at steady state so ADC jitter stays invisible */
+        f->filtered_dc = (f->filtered_dc * 5 + raw_deci_c + 3) / 6;
+    }
+
+    if (settled_mode != 0u && active_target_c > 0u &&
+        abs_i32(f->filtered_dc - (int32_t)active_target_c * 10) <= 10) {
+        f->shown_c = (int16_t)active_target_c;
+    } else if (abs_i32(f->filtered_dc - (int32_t)f->shown_c * 10) >= 7) {
+        f->shown_c = (int16_t)((f->filtered_dc + 5) / 10);
+    }
+
+    if (f->shown_c < 0) {
+        f->shown_c = 0;
+    } else if (f->shown_c > 999) {
+        f->shown_c = 999;
+    }
+    return f->shown_c;
+}
+
+static int16_t ui_display_temp_c(const ui_status_t *st) {
+    if (st->display_temp_c > 0) {
+        return st->display_temp_c;
+    }
+    int32_t dc = st->hst.tip_deci_c;
+    if (dc < 0) dc = 0;
+    int32_t c = (dc + 5) / 10;
+    if (c > 999) c = 999;
+    return (int16_t)c;
+}
+
 static size_t append_fixed_1(char *buf, size_t pos, size_t cap, int32_t deci, uint8_t whole_w) {
     if (deci < 0) deci = 0;
     uint32_t whole = (uint32_t)deci / 10u;
@@ -347,7 +406,8 @@ static void ui_draw_menu_dynamic(const input_state_t *inp, const ui_status_t *st
         gfx_draw_badge(62u, 4u, 112u, 18u, "OPEN! NO TIP", COL_RED, COL_RED_DARK, COL_RED);
     } else {
         size_t p = 0u;
-        p = append_fixed_1(line, p, sizeof(line), h->tip_deci_c, 3u);
+        fmt_uint_pad(num, sizeof(num), (uint32_t)ui_display_temp_c(st), 3u, ' ');
+        p = fmt_append_str(line, p, sizeof(line), num);
         p = fmt_append_str(line, p, sizeof(line), "C ");
         (void)fmt_append_str(line, p, sizeof(line), st_label);
         gfx_draw_badge(62u, 4u, 112u, 18u, line, st_fg, st_bg, st_bd);
@@ -450,12 +510,12 @@ static void ui_draw_graph_dynamic(
     if ((h->fault_mask & FAULT_OPEN_TIP) != 0u) {
         gfx_draw_text(14u, 35u, "OPEN!  ", COL_RED, COL_CARD, 2u);
     } else {
-        size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
-        line[tp] = '\0';
+        fmt_uint_pad(line, sizeof(line), (uint32_t)ui_display_temp_c(st), 3u, ' ');
         uint16_t temp_col = pick_temp_color(h, st_fg);
         gfx_draw_text(14u, 35u, line, temp_col, COL_CARD, 2u);
-        gfx_draw_rect(76u, 35u, 4u, 4u, temp_col);
-        gfx_draw_text(82u, 36u, "C", temp_col, COL_CARD, 1u);
+        gfx_fill_rect(50u, 35u, 48u, 14u, COL_CARD);
+        gfx_draw_rect(52u, 35u, 4u, 4u, temp_col);
+        gfx_draw_text(58u, 36u, "C", temp_col, COL_CARD, 1u);
     }
 
     format_setpoint_str(h, line, sizeof(line));
@@ -570,12 +630,11 @@ static void ui_draw_standby_dynamic(
     );
 
     /* Centerpiece live temperature (watch warm-up to 100 C) */
-    size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
-    line[tp] = '\0';
+    fmt_uint_pad(line, sizeof(line), (uint32_t)ui_display_temp_c(st), 3u, ' ');
     uint16_t temp_col = (h->state == HEATER_SLEEP) ? COL_CYAN : COL_TEXT;
-    gfx_draw_text(89u, 58u, line, temp_col, COL_CARD, 4u);
-    gfx_draw_rect(212u, 58u, 5u, 5u, temp_col);
-    gfx_draw_text(219u, 60u, "C", temp_col, COL_CARD, 2u);
+    gfx_draw_text(114u, 58u, line, temp_col, COL_CARD, 4u);
+    gfx_draw_rect(190u, 58u, 5u, 5u, temp_col);
+    gfx_draw_text(198u, 60u, "C", temp_col, COL_CARD, 2u);
 
     /* Centered preheat progress bar (198 px inside 60..260 border) */
     uint16_t pct = (h->duty_pct > 100u) ? 100u : (uint16_t)h->duty_pct;
@@ -739,12 +798,12 @@ void ui_draw_dynamic(const sensor_snapshot_t *snap, const input_state_t *inp, co
         } else {
             gfx_draw_text(14u, 36u, "TIP TEMPERATURE     ", COL_MUTED, COL_CARD, 1u);
         }
-        size_t tp = append_fixed_1(line, 0u, sizeof(line), h->tip_deci_c, 3u);
-        line[tp] = '\0';
+        fmt_uint_pad(line, sizeof(line), (uint32_t)ui_display_temp_c(st), 3u, ' ');
         uint16_t temp_col = pick_temp_color(h, st_fg);
         gfx_draw_text(14u, 48u, line, temp_col, COL_CARD, 4u);
-        gfx_draw_rect(138u, 48u, 5u, 5u, temp_col);
-        gfx_draw_text(145u, 50u, "C", temp_col, COL_CARD, 2u);
+        gfx_fill_rect(86u, 48u, 80u, 28u, COL_CARD);
+        gfx_draw_rect(90u, 48u, 5u, 5u, temp_col);
+        gfx_draw_text(98u, 50u, "C", temp_col, COL_CARD, 2u);
     }
 
     /* Setpoint line */

@@ -21,19 +21,28 @@ int main(void) {
     assert(sensors_rail_adc_to_mv(180u) == 145u * 16u);
     assert(sensors_rail_adc_to_mv(1780u) == 1434u * 16u);
 
-    /* Thermocouple 5-segment piecewise LUTs (F245 & F210) */
-    assert(sensors_tip_adc_to_deci_c(0u, 1u, 0) == 0);
-    assert(sensors_tip_adc_to_deci_c(1100u, 1u, 0) == 1500);
-    assert(sensors_tip_adc_to_deci_c(1870u, 1u, 0) == 2500);
-    assert(sensors_tip_adc_to_deci_c(2610u, 1u, 0) == 3500);
-    assert(sensors_tip_adc_to_deci_c(3340u, 1u, 0) == 4500);
-    assert(sensors_tip_adc_to_deci_c(1870u, 1u, 50) == 2550); /* +5.0 C cal offset */
+    /* Thermocouple 5-segment piecewise LUTs (F245 & F210) with +25.0 C stock cold-junction offset */
+    assert(sensors_tip_adc_to_deci_c(0u, 1u, 0) == 250);
+    assert(sensors_tip_adc_to_deci_c(1100u, 1u, 0) == 1750);
+    assert(sensors_tip_adc_to_deci_c(1870u, 1u, 0) == 2750);
+    assert(sensors_tip_adc_to_deci_c(2610u, 1u, 0) == 3750);
+    assert(sensors_tip_adc_to_deci_c(3340u, 1u, 0) == 4750);
+    assert(sensors_tip_adc_to_deci_c(1870u, 1u, 50) == 2800); /* +5.0 C cal offset */
 
-    assert(sensors_tip_adc_to_deci_c(0u, 0u, 0) == 0);
-    assert(sensors_tip_adc_to_deci_c(276u, 0u, 0) == 1500);
-    assert(sensors_tip_adc_to_deci_c(608u, 0u, 0) == 2500);
-    assert(sensors_tip_adc_to_deci_c(882u, 0u, 0) == 3500);
-    assert(sensors_tip_adc_to_deci_c(1210u, 0u, 0) == 4500);
+    assert(sensors_tip_adc_to_deci_c(0u, 0u, 0) == 250);
+    assert(sensors_tip_adc_to_deci_c(276u, 0u, 0) == 1750);
+    assert(sensors_tip_adc_to_deci_c(608u, 0u, 0) == 2750);
+    assert(sensors_tip_adc_to_deci_c(882u, 0u, 0) == 3750);
+    assert(sensors_tip_adc_to_deci_c(1210u, 0u, 0) == 4750);
+
+    /* 3-point calibration (150 C, 250 C, 350 C knots) + linear segment interpolation */
+    const int16_t cal3[3] = { -100, 50, 120 };
+    assert(sensors_tip_adc_to_deci_c_3pt(0u, 1u, cal3) == 250);
+    assert(sensors_tip_adc_to_deci_c_3pt(550u, 1u, cal3) == 950);
+    assert(sensors_tip_adc_to_deci_c_3pt(1100u, 1u, cal3) == 1650);
+    assert(sensors_tip_adc_to_deci_c_3pt(1870u, 1u, cal3) == 2800);
+    assert(sensors_tip_adc_to_deci_c_3pt(2610u, 1u, cal3) == 3870);
+    assert(sensors_tip_adc_to_deci_c_3pt(3340u, 1u, cal3) == 4870);
 
     /* Moving-average filter (16 samples) */
     sensor_filter_t f;

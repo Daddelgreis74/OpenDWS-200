@@ -41,8 +41,8 @@ void heater_ctrl_init(
     uint16_t target_c,
     uint16_t sleep_temp_c,
     uint8_t sleep_en,
-    int16_t cal_f245_dc,
-    int16_t cal_f210_dc,
+    const int16_t cal_f245_dc[3],
+    const int16_t cal_f210_dc[3],
     void (*set_mux_cb)(uint8_t is_f245)
 ) {
     if (c == NULL) return;
@@ -50,8 +50,10 @@ void heater_ctrl_init(
     c->target_c = clamp_target_c(target_c);
     c->sleep_temp_c = clamp_sleep_temp_c(sleep_temp_c);
     c->sleep_en = sleep_en ? 1u : 0u;
-    c->cal_f245_dc = clamp_cal_dc(cal_f245_dc);
-    c->cal_f210_dc = clamp_cal_dc(cal_f210_dc);
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        c->cal_f245_dc[i] = clamp_cal_dc((cal_f245_dc != NULL) ? cal_f245_dc[i] : 0);
+        c->cal_f210_dc[i] = clamp_cal_dc((cal_f210_dc != NULL) ? cal_f210_dc[i] : 0);
+    }
 
     c->state = HEATER_STANDBY;
     c->armed = 0u; /* Boot-safe invariant: NEVER start heating to full target without lift/cmd */
@@ -207,8 +209,8 @@ uint8_t heater_ctrl_step_10ms(heater_ctrl_t *c, uint16_t tip_raw, uint8_t pb6_ra
     }
 
     /* 5. Thermocouple conversion + EMA filter (alpha = 0.2) */
-    int16_t cal_dc = c->is_f245 ? c->cal_f245_dc : c->cal_f210_dc;
-    int32_t sample_dc = sensors_tip_adc_to_deci_c(tip_raw, c->is_f245, cal_dc);
+    const int16_t *cal_dc = c->is_f245 ? c->cal_f245_dc : c->cal_f210_dc;
+    int32_t sample_dc = sensors_tip_adc_to_deci_c_3pt(tip_raw, c->is_f245, cal_dc);
     if (c->ema_initialized == 0u) {
         c->tip_deci_c = sample_dc;
         c->ema_initialized = 1u;
@@ -555,16 +557,30 @@ heater_cmd_err_t heater_ctrl_set_auto_off(heater_ctrl_t *c, uint8_t minutes) {
     return HEATER_CMD_OK;
 }
 
+heater_cmd_err_t heater_ctrl_set_cal_point(heater_ctrl_t *c, uint8_t point_idx, int16_t offset_c) {
+    if (c == NULL) return HEATER_CMD_ERR_FAULT;
+    if (point_idx >= 3u) return HEATER_CMD_ERR_RANGE;
+    if (offset_c < CAL_OFFSET_MIN_C || offset_c > CAL_OFFSET_MAX_C) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    int16_t dc = (int16_t)(offset_c * 10);
+    if (c->is_f245 != 0u) {
+        c->cal_f245_dc[point_idx] = dc;
+    } else {
+        c->cal_f210_dc[point_idx] = dc;
+    }
+    return HEATER_CMD_OK;
+}
+
 heater_cmd_err_t heater_ctrl_set_cal(heater_ctrl_t *c, int16_t offset_c) {
     if (c == NULL) return HEATER_CMD_ERR_FAULT;
     if (offset_c < CAL_OFFSET_MIN_C || offset_c > CAL_OFFSET_MAX_C) {
         return HEATER_CMD_ERR_RANGE;
     }
     int16_t dc = (int16_t)(offset_c * 10);
-    if (c->is_f245 != 0u) {
-        c->cal_f245_dc = dc;
-    } else {
-        c->cal_f210_dc = dc;
+    int16_t *dst = (c->is_f245 != 0u) ? c->cal_f245_dc : c->cal_f210_dc;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        dst[i] = dc;
     }
     return HEATER_CMD_OK;
 }
@@ -607,6 +623,10 @@ void heater_ctrl_get_status(const heater_ctrl_t *c, uint8_t pin_on, heater_statu
     out->cur_raw = c->cur_raw;
     out->aux_raw = c->aux_raw;
     out->auto_off_triggered = c->auto_off_triggered;
+    const int16_t *cal = c->is_f245 ? c->cal_f245_dc : c->cal_f210_dc;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        out->cal_dc[i] = cal[i];
+    }
     if (c->state == HEATER_SLEEP && c->auto_off_sec > 0u) {
         uint32_t total_ticks = (uint32_t)c->auto_off_sec * 100u;
         if (total_ticks > c->sleep_elapsed_ticks) {
@@ -826,8 +846,8 @@ void heater_init(
     uint16_t target_c,
     uint16_t sleep_temp_c,
     uint8_t sleep_en,
-    int16_t cal_f245_dc,
-    int16_t cal_f210_dc
+    const int16_t cal_f245_dc[3],
+    const int16_t cal_f210_dc[3]
 ) {
     heater_ctrl_init(
         &g_ctrl,
@@ -850,8 +870,8 @@ void heater_init(
         g_ctrl.tip_deci_c = (int32_t)TEMP_HARD_CUTOFF_C * 10;
         g_ctrl.state = HEATER_FAULT;
     } else {
-        int16_t cal = g_ctrl.is_f245 ? g_ctrl.cal_f245_dc : g_ctrl.cal_f210_dc;
-        g_ctrl.tip_deci_c = sensors_tip_adc_to_deci_c(tip, g_ctrl.is_f245, cal);
+        const int16_t *cal = g_ctrl.is_f245 ? g_ctrl.cal_f245_dc : g_ctrl.cal_f210_dc;
+        g_ctrl.tip_deci_c = sensors_tip_adc_to_deci_c_3pt(tip, g_ctrl.is_f245, cal);
         g_ctrl.ema_initialized = 1u;
     }
     heater_ctrl_update_rail(&g_ctrl, aux);
@@ -906,6 +926,13 @@ heater_cmd_err_t heater_set_cal(int16_t offset_c) {
     return r;
 }
 
+heater_cmd_err_t heater_set_cal_point(uint8_t point_idx, int16_t offset_c) {
+    lock_control_irqs();
+    heater_cmd_err_t r = heater_ctrl_set_cal_point(&g_ctrl, point_idx, offset_c);
+    unlock_control_irqs();
+    return r;
+}
+
 heater_cmd_err_t heater_clear_fault(void) {
     lock_control_irqs();
     heater_cmd_err_t r = heater_ctrl_clear_fault(&g_ctrl);
@@ -933,8 +960,8 @@ void heater_init(
     uint16_t target_c,
     uint16_t sleep_temp_c,
     uint8_t sleep_en,
-    int16_t cal_f245_dc,
-    int16_t cal_f210_dc
+    const int16_t cal_f245_dc[3],
+    const int16_t cal_f210_dc[3]
 ) {
     heater_ctrl_init(
         &g_ctrl, 1u, 0u, target_c, sleep_temp_c, sleep_en, cal_f245_dc, cal_f210_dc, board_set_handle_mux
@@ -952,6 +979,9 @@ heater_cmd_err_t heater_set_sleep(uint8_t enable, uint16_t sleep_temp_c, uint8_t
 }
 heater_cmd_err_t heater_set_auto_off(uint8_t minutes) { return heater_ctrl_set_auto_off(&g_ctrl, minutes); }
 heater_cmd_err_t heater_set_cal(int16_t offset_c) { return heater_ctrl_set_cal(&g_ctrl, offset_c); }
+heater_cmd_err_t heater_set_cal_point(uint8_t point_idx, int16_t offset_c) {
+    return heater_ctrl_set_cal_point(&g_ctrl, point_idx, offset_c);
+}
 heater_cmd_err_t heater_clear_fault(void) { return heater_ctrl_clear_fault(&g_ctrl); }
 void heater_get_status(heater_status_t *out) { heater_ctrl_get_status(&g_ctrl, board_heater_is_on(), out); }
 void heater_get_latest_adc(uint16_t *tip_raw, uint16_t *cur_raw, uint16_t *aux_raw) {

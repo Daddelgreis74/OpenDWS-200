@@ -22,7 +22,10 @@ int main(void) {
     s.target_c = 365u;
     s.sleep_en = 0u;
     s.sleep_temp_c = 180u;
-    s.cal_f245_deci_c = -30;
+    s.cal_f245_dc[0] = -150;
+    s.cal_f245_dc[1] = -30;
+    s.cal_f245_dc[2] = 90;
+    s.cal_f210_dc[1] = 40;
     s.backlight_pct = 45u;
     s.stream_enabled = 1u;
     s.stream_interval_ms = 250u;
@@ -36,7 +39,8 @@ int main(void) {
     assert(loaded.target_c == 365u);
     assert(loaded.sleep_en == 0u);
     assert(loaded.sleep_temp_c == 180u);
-    assert(loaded.cal_f245_deci_c == -30);
+    assert(loaded.cal_f245_dc[0] == -150 && loaded.cal_f245_dc[1] == -30 && loaded.cal_f245_dc[2] == 90);
+    assert(loaded.cal_f210_dc[1] == 40);
     assert(loaded.backlight_pct == 45u);
     assert(loaded.stream_enabled == 1u);
     assert(loaded.stream_interval_ms == 250u);
@@ -48,7 +52,7 @@ int main(void) {
     memset(&loaded, 0, sizeof(loaded));
     settings_load_safe(&loaded);
     assert(loaded.target_c == 365u);
-    assert(loaded.cal_f245_deci_c == -30);
+    assert(loaded.cal_f245_dc[0] == -150 && loaded.cal_f245_dc[1] == -30 && loaded.cal_f245_dc[2] == 90);
 
     /* 0W sleep mode (sleep_temp_c == 0) must validate cleanly */
     s.sleep_temp_c = 0u;

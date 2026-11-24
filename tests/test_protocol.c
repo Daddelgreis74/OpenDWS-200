@@ -68,8 +68,17 @@ static heater_cmd_err_t mock_set_sleep(uint8_t en, uint16_t st, uint8_t upd, voi
 }
 
 static heater_cmd_err_t mock_set_cal(int16_t off_c, void *user) {
-    (void)off_c;
-    (void)user;
+    mock_ctx_t *m = (mock_ctx_t *)user;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        m->hst.cal_dc[i] = (int16_t)(off_c * 10);
+    }
+    return HEATER_CMD_OK;
+}
+
+static heater_cmd_err_t mock_set_cal_point(uint8_t pt, int16_t off_c, void *user) {
+    mock_ctx_t *m = (mock_ctx_t *)user;
+    if (pt >= 3u) return HEATER_CMD_ERR_RANGE;
+    m->hst.cal_dc[pt] = (int16_t)(off_c * 10);
     return HEATER_CMD_OK;
 }
 
@@ -115,6 +124,7 @@ int main(void) {
         .select_preset = mock_select_preset,
         .set_sleep = mock_set_sleep,
         .set_cal = mock_set_cal,
+        .set_cal_point = mock_set_cal_point,
         .clear_fault = mock_clear_fault,
         .save_settings = mock_save,
         .user = &m
@@ -150,6 +160,7 @@ int main(void) {
     assert(strstr(m.out, "tip_c=24.5") != NULL);
     assert(strstr(m.out, "rail_mv=22920") != NULL);
     assert(strstr(m.out, "heater=0") != NULL);
+    assert(strstr(m.out, "cal=0,0,0") != NULL);
 
     /* HEAT blocked when < 15 V USB-only */
     m.hst.rail_mv = 2320u;
@@ -199,8 +210,29 @@ int main(void) {
     assert(strcmp(m.out, "ERR SLEEP_RANGE_0_OR_50_250\r\n") == 0);
 
     reset_out(&m);
+    protocol_handle_line(&proto, "CAL 250 18", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK CAL 250=18\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "CAL 150 -10", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK CAL 150=-10\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "CAL 350 5", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "OK CAL 350=5\r\n") == 0);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "STAT", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strstr(m.out, "cal=-10,18,5") != NULL);
+
+    reset_out(&m);
+    protocol_handle_line(&proto, "CAL 200 5", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
+    assert(strcmp(m.out, "ERR CAL_POINT_150_250_350\r\n") == 0);
+
+    reset_out(&m);
     protocol_handle_line(&proto, "CAL -12", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);
     assert(strcmp(m.out, "OK CAL=-12\r\n") == 0);
+    assert(m.hst.cal_dc[0] == -120 && m.hst.cal_dc[1] == -120 && m.hst.cal_dc[2] == -120);
 
     reset_out(&m);
     protocol_handle_line(&proto, "SAVE", &snap, &inp, &m.hst, m.bl, m.leds, 1234u);

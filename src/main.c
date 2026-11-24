@@ -46,10 +46,23 @@ static void sync_settings_from_runtime(app_ctx_t *app) {
     app->settings.sleep_temp_c = app->hst.sleep_temp_c;
     app->settings.sleep_en = app->hst.sleep_en;
     app->settings.backlight_pct = board_get_backlight();
+    int16_t *cal_dst = (app->hst.is_f245 != 0u) ? app->settings.cal_f245_dc : app->settings.cal_f210_dc;
+    for (uint32_t i = 0u; i < 3u; ++i) {
+        cal_dst[i] = app->hst.cal_dc[i];
+    }
     if (app->proto != NULL) {
         app->settings.stream_enabled = app->proto->stream_enabled;
         app->settings.stream_interval_ms = app->proto->stream_interval_ms;
     }
+}
+
+static int16_t active_cal_offset_c(const app_ctx_t *app) {
+    const int16_t *cal_dc = (app->hst.is_f245 != 0u)
+        ? app->settings.cal_f245_dc
+        : app->settings.cal_f210_dc;
+    uint16_t t = app->hst.active_target_c;
+    uint8_t idx = (t < 200u) ? 0u : ((t < 300u) ? 1u : 2u);
+    return (int16_t)(cal_dc[idx] / 10);
 }
 
 static void proto_write_cb(const char *data, size_t len, void *user) {
@@ -149,11 +162,24 @@ static heater_cmd_err_t proto_set_cal_cb(int16_t offset_c, void *user) {
     heater_cmd_err_t err = heater_set_cal(offset_c);
     if (err == HEATER_CMD_OK && app != NULL) {
         heater_get_status(&app->hst);
-        if (app->hst.is_f245 != 0u) {
-            app->settings.cal_f245_deci_c = (int16_t)(offset_c * 10);
-        } else {
-            app->settings.cal_f210_deci_c = (int16_t)(offset_c * 10);
+        int16_t *dst = (app->hst.is_f245 != 0u) ? app->settings.cal_f245_dc : app->settings.cal_f210_dc;
+        for (uint32_t i = 0u; i < 3u; ++i) {
+            dst[i] = (int16_t)(offset_c * 10);
         }
+    }
+    return err;
+}
+
+static heater_cmd_err_t proto_set_cal_point_cb(uint8_t point_idx, int16_t offset_c, void *user) {
+    app_ctx_t *app = (app_ctx_t *)user;
+    if (point_idx >= 3u) {
+        return HEATER_CMD_ERR_RANGE;
+    }
+    heater_cmd_err_t err = heater_set_cal_point(point_idx, offset_c);
+    if (err == HEATER_CMD_OK && app != NULL) {
+        heater_get_status(&app->hst);
+        int16_t *dst = (app->hst.is_f245 != 0u) ? app->settings.cal_f245_dc : app->settings.cal_f210_dc;
+        dst[point_idx] = (int16_t)(offset_c * 10);
     }
     return err;
 }
@@ -277,8 +303,10 @@ static void apply_menu_actions(app_ctx_t *app, uint32_t act, uint32_t now) {
         }
     }
     if ((act & MENU_ACT_CHANGED_CAL) != 0u) {
-        int16_t cal_dc = app->hst.is_f245 ? app->settings.cal_f245_deci_c : app->settings.cal_f210_deci_c;
-        (void)heater_set_cal((int16_t)(cal_dc / 10));
+        const int16_t *cal_dc = app->hst.is_f245 ? app->settings.cal_f245_dc : app->settings.cal_f210_dc;
+        for (uint8_t i = 0u; i < 3u; ++i) {
+            (void)heater_set_cal_point(i, (int16_t)(cal_dc[i] / 10));
+        }
         heater_get_status(&app->hst);
     }
     if ((act & MENU_ACT_CHANGED_BL) != 0u) {
@@ -326,8 +354,8 @@ int main(void) {
         app.settings.target_c,
         app.settings.sleep_temp_c,
         app.settings.sleep_en,
-        app.settings.cal_f245_deci_c,
-        app.settings.cal_f210_deci_c
+        app.settings.cal_f245_dc,
+        app.settings.cal_f210_dc
     );
     (void)heater_set_auto_off(app.settings.auto_off_min);
 
@@ -348,6 +376,7 @@ int main(void) {
         .select_preset = proto_select_preset_cb,
         .set_sleep = proto_set_sleep_cb,
         .set_cal = proto_set_cal_cb,
+        .set_cal_point = proto_set_cal_point_cb,
         .clear_fault = proto_clear_fault_cb,
         .save_settings = proto_save_cb,
         .user = &app
@@ -374,6 +403,9 @@ int main(void) {
     sensors_record_power_pct(&app.ui_sensors, app.hst.duty_pct, &snap);
     input_poll(board_ticks_ms(), &inp);
 
+    ui_temp_filter_t ui_tf;
+    ui_temp_filter_init(&ui_tf);
+
     ui_draw_static();
 
     ui_status_t ui_st;
@@ -384,7 +416,15 @@ int main(void) {
     ui_st.presets_c[1] = app.settings.presets_c[1];
     ui_st.presets_c[2] = app.settings.presets_c[2];
     ui_st.active_preset = app.active_preset;
-    ui_st.cal_offset_c = (int16_t)((app.hst.is_f245 ? app.settings.cal_f245_deci_c : app.settings.cal_f210_deci_c) / 10);
+    ui_st.cal_offset_c = active_cal_offset_c(&app);
+    ui_st.display_temp_c = ((app.hst.fault_mask & FAULT_OPEN_TIP) != 0u)
+        ? 0
+        : ui_temp_filter_step(
+              &ui_tf,
+              app.hst.tip_deci_c,
+              app.hst.active_target_c,
+              (app.hst.state == HEATER_HEATING || app.hst.state == HEATER_SLEEP) ? 1u : 0u
+          );
     ui_st.usb_connected = usb_cdc_is_connected();
     ui_st.stream_enabled = proto.stream_enabled;
     ui_st.stream_interval_ms = proto.stream_interval_ms;
@@ -570,9 +610,19 @@ int main(void) {
             ui_st.presets_c[1] = app.settings.presets_c[1];
             ui_st.presets_c[2] = app.settings.presets_c[2];
             ui_st.active_preset = app.active_preset;
-            ui_st.cal_offset_c = (int16_t)(
-                (app.hst.is_f245 ? app.settings.cal_f245_deci_c : app.settings.cal_f210_deci_c) / 10
-            );
+            ui_st.cal_offset_c = active_cal_offset_c(&app);
+            if ((app.hst.fault_mask & FAULT_OPEN_TIP) != 0u) {
+                ui_temp_filter_init(&ui_tf);
+                ui_st.display_temp_c = 0;
+            } else {
+                uint8_t settled_mode = (app.hst.state == HEATER_HEATING || app.hst.state == HEATER_SLEEP) ? 1u : 0u;
+                ui_st.display_temp_c = ui_temp_filter_step(
+                    &ui_tf,
+                    app.hst.tip_deci_c,
+                    app.hst.active_target_c,
+                    settled_mode
+                );
+            }
             ui_st.usb_connected = usb_cdc_is_connected();
             ui_st.stream_enabled = proto.stream_enabled;
             ui_st.stream_interval_ms = proto.stream_interval_ms;

@@ -15,6 +15,7 @@ static void mock_mux(uint8_t is_f245) {
 static uint16_t f245_dc_to_adc(int32_t dc) {
     static const int32_t y[5] = { 0, 1500, 2500, 3500, 4500 };
     static const int32_t x[5] = { 0, 1100, 1870, 2610, 3340 };
+    dc -= TIP_COLD_JUNCTION_DECI_C;
     if (dc <= 0) return 0u;
     if (dc >= 4500) {
         int32_t v = x[4] + ((dc - y[4]) * (x[4] - x[3])) / 1000;
@@ -31,7 +32,7 @@ int main(void) {
 
     /* 1. Boot-safe Standby (iron IN stand PB5=0) & F245 initialization */
     g_mux_calls = 0u;
-    heater_ctrl_init(&c, 1u, 0u, 300u, 100u, 1u, 0, 0, mock_mux);
+    heater_ctrl_init(&c, 1u, 0u, 300u, 100u, 1u, NULL, NULL, mock_mux);
     assert(c.armed == 0u);
     assert(c.in_stand == 1u);
     assert(c.state == HEATER_STANDBY);
@@ -40,7 +41,7 @@ int main(void) {
 
     /* Boot with iron ALREADY out of stand (PB5=1) must NEVER auto-heat */
     heater_ctrl_t out_boot;
-    heater_ctrl_init(&out_boot, 1u, 1u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_init(&out_boot, 1u, 1u, 300u, 100u, 1u, NULL, NULL, NULL);
     heater_ctrl_update_rail(&out_boot, 1780u);
     for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS + 30u; ++i) {
         assert(heater_ctrl_step_10ms(&out_boot, 200u, 1u, 1u) == 0u);
@@ -93,7 +94,7 @@ int main(void) {
 
     /* Manual disarm in stand still wakes with 5-tick probe pulse when lifted */
     heater_ctrl_t lift_wake;
-    heater_ctrl_init(&lift_wake, 1u, 0u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_init(&lift_wake, 1u, 0u, 300u, 100u, 1u, NULL, NULL, NULL);
     heater_ctrl_update_rail(&lift_wake, 1780u);
     for (uint32_t i = 0u; i < HANDLE_SETTLE_TICKS; ++i) {
         (void)heater_ctrl_step_10ms(&lift_wake, 200u, 1u, 0u);
@@ -273,7 +274,7 @@ int main(void) {
 
     /* 13. Auto-Off timer cuts heater to cold STANDBY after sleep timeout and wakes on stand lift */
     heater_ctrl_t ao;
-    heater_ctrl_init(&ao, 1u, 0u, 300u, 100u, 1u, 0, 0, NULL);
+    heater_ctrl_init(&ao, 1u, 0u, 300u, 100u, 1u, NULL, NULL, NULL);
     heater_ctrl_update_rail(&ao, 1780u);
     assert(heater_ctrl_set_auto_off(&ao, 1u) == HEATER_CMD_OK); /* 60 s timeout */
     assert(heater_ctrl_set_auto_off(&ao, 99u) == HEATER_CMD_ERR_RANGE);
@@ -300,6 +301,14 @@ int main(void) {
     }
     assert(heater_ctrl_step_10ms(&ao, 720u, 1u, 1u) == PROBE_PULSE_TICKS);
     assert(ao.armed == 1u && ao.auto_off_triggered == 0u);
+
+    /* 14. 3-point calibration per handle */
+    assert(heater_ctrl_set_cal_point(&ao, 0u, -15) == HEATER_CMD_OK);
+    assert(heater_ctrl_set_cal_point(&ao, 1u, 12) == HEATER_CMD_OK);
+    assert(heater_ctrl_set_cal_point(&ao, 2u, 20) == HEATER_CMD_OK);
+    assert(heater_ctrl_set_cal_point(&ao, 3u, 0) == HEATER_CMD_ERR_RANGE);
+    heater_ctrl_get_status(&ao, 0u, &ao_st);
+    assert(ao_st.cal_dc[0] == -150 && ao_st.cal_dc[1] == 120 && ao_st.cal_dc[2] == 200);
 
     printf("test_heater: PASS\n");
     return 0;

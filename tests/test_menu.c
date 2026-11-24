@@ -99,31 +99,43 @@ int main(void) {
     act = menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
     assert((act & MENU_ACT_SAVE_FLASH) != 0u);
 
-    /* Step down wraps 11 -> 0 */
+    /* Step down wraps 13 -> 0 */
     (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     assert(m.cursor == 0u && m.scroll_top == 0u);
 
-    /* Jump to Cal (item 7) for F245 vs F210 */
+    /* Jump to Cal 150 / 250 / 350 (items 7..9) for F245 vs F210 */
     for (int i = 0; i < 7; ++i) {
         (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     }
-    assert(m.cursor == MENU_ITEM_CAL);
-    assert(strcmp(menu_item_label(MENU_ITEM_CAL, 1u), "Cal (F245)") == 0);
-    assert(strcmp(menu_item_label(MENU_ITEM_CAL, 0u), "Cal (F210)") == 0);
+    assert(m.cursor == MENU_ITEM_CAL_150);
+    assert(strcmp(menu_item_label(MENU_ITEM_CAL_150, 1u), "Cal 150 (F245)") == 0);
+    assert(strcmp(menu_item_label(MENU_ITEM_CAL_150, 0u), "Cal 150 (F210)") == 0);
     (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
     act = menu_handle_key(&m, KEY_BIT_PB3, &s, 1u);
     assert((act & MENU_ACT_CHANGED_CAL) != 0u);
-    assert(s.cal_f245_deci_c == 10);
+    assert(s.cal_f245_dc[0] == 10);
 
     char val[24];
-    menu_format_value(MENU_ITEM_CAL, &s, 1u, 0u, val, sizeof(val));
+    menu_format_value(MENU_ITEM_CAL_150, &s, 1u, 0u, val, sizeof(val));
     assert(strcmp(val, "+1 C") == 0);
     menu_format_value(MENU_ITEM_SAVE, &s, 1u, 1u, val, sizeof(val));
     assert(strcmp(val, "SAVED!") == 0);
 
+    /* Step to Cal 250, decrement to -1 C, then advance past Cal 350 to Backlight */
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* exit Cal 150 edit */
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u); /* Cal 250 */
+    assert(m.cursor == MENU_ITEM_CAL_250);
+    assert(strcmp(menu_item_label(MENU_ITEM_CAL_250, 1u), "Cal 250 (F245)") == 0);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u);
+    act = menu_handle_key(&m, KEY_BIT_PC12, &s, 1u);
+    assert((act & MENU_ACT_CHANGED_CAL) != 0u && s.cal_f245_dc[1] == -10);
+    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* exit Cal 250 edit */
+    (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u); /* Cal 350 */
+    assert(m.cursor == MENU_ITEM_CAL_350);
+    assert(strcmp(menu_item_label(MENU_ITEM_CAL_350, 0u), "Cal 350 (F210)") == 0);
+
     /* Backlight clamp check */
     s.backlight_pct = 100u;
-    (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* exit Cal edit */
     (void)menu_handle_key(&m, KEY_BIT_PB3, &s, 1u); /* Backlight */
     assert(m.cursor == MENU_ITEM_BACKLIGHT);
     (void)menu_handle_key(&m, KEY_BIT_PD2, &s, 1u); /* edit Backlight */

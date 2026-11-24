@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC   0x5357444Fu /* "ODWS" */
-#define SETTINGS_VERSION 5u
+#define SETTINGS_VERSION 6u
 
 typedef struct {
     uint32_t magic;
@@ -12,8 +12,8 @@ typedef struct {
     uint16_t target_c;
     uint16_t presets_c[3];
     uint16_t sleep_temp_c;
-    int16_t  cal_f245_deci_c;
-    int16_t  cal_f210_deci_c;
+    int16_t  cal_f245_dc[3]; /* 150 C, 250 C, 350 C offsets in deci-C */
+    int16_t  cal_f210_dc[3]; /* 150 C, 250 C, 350 C offsets in deci-C */
     uint16_t stream_interval_ms;
     uint8_t  sleep_en;
     uint8_t  backlight_pct;
@@ -22,7 +22,7 @@ typedef struct {
     uint8_t  stream_enabled;
     uint8_t  standby_screen_en;
     uint8_t  auto_off_min;
-    uint8_t  reserved[1];
+    uint8_t  reserved[3];
     uint32_t crc32;
 } opendws_settings_t;
 

@@ -44,6 +44,14 @@
     return { faultHex: str, faultName: str };
   }
 
+  function parseCalList(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    const parts = raw.split(',');
+    if (parts.length !== 3) return null;
+    const nums = parts.map((p) => Number.parseInt(p, 10));
+    return nums.every((n) => Number.isFinite(n)) ? nums : null;
+  }
+
   function parseInfoLine(line) {
     const trimmed = String(line || '').trim();
     if (!trimmed.startsWith('INFO ')) return null;
@@ -99,6 +107,7 @@
       bl: toInt(kv.bl, 0),
       ledHex: kv.led || '0x00',
       heaterOn: toInt(kv.heater, 0),
+      cal: parseCalList(kv.cal),
       watts,
     };
   }

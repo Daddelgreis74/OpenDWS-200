@@ -378,6 +378,39 @@ html, body {
   width: 74px;
 }
 
+.cal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+
+.cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cal-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 48px;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-cal {
+  width: 100%;
+  min-width: 0;
+}
+
+.cal-hint {
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .input-text {
   flex: 1;
   min-width: 0;

@@ -1,5 +1,6 @@
 #include "sensors.h"
 
+#include "app_config.h"
 #include "hw.h"
 
 #include <stddef.h>
@@ -26,15 +27,26 @@ int32_t sensors_cur_adc_to_ma(uint16_t raw) {
     return sensors_cur_adc_to_ma_zero(raw, 1650u);
 }
 
-int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_offset_deci_c) {
+int32_t sensors_tip_adc_to_deci_c_3pt(uint16_t raw, uint8_t is_f245, const int16_t cal_dc[3]) {
     /*
-     * Stock APP_DWS_200_V1.5 (0x0800FD84) 5-segment piecewise linear LUTs:
-     *   F245 (handle_type=1): (0,0), (1100,150C), (1870,250C), (2610,350C), (3340,450C)
-     *   F210 (handle_type=0): (0,0), ( 276,150C), ( 608,250C), ( 882,350C), (1210,450C)
+     * Stock APP_DWS_200_V1.5 (0x0800FD84 Temp_Read + 0x0801243E +25 C CJ) 5-segment LUT:
+     *   F245 (handle_type=1): (0,0), (1100,150+c0), (1870,250+c1), (2610,350+c2), (3340,450+c2)
+     *   F210 (handle_type=0): (0,0), ( 276,150+c0), ( 608,250+c1), ( 882,350+c2), (1210,450+c2)
+     * Stock then adds the fixed +25.0 C (+250 deci-C) cold-junction baseline to the result.
      */
     static const uint16_t f245_x[5] = { 0u, 1100u, 1870u, 2610u, 3340u };
     static const uint16_t f210_x[5] = { 0u,  276u,  608u,  882u, 1210u };
-    static const int32_t  lut_y[5]  = { 0,  1500,  2500,  3500,  4500  };
+
+    const int32_t c0 = (cal_dc != NULL) ? (int32_t)cal_dc[0] : 0;
+    const int32_t c1 = (cal_dc != NULL) ? (int32_t)cal_dc[1] : 0;
+    const int32_t c2 = (cal_dc != NULL) ? (int32_t)cal_dc[2] : 0;
+    const int32_t lut_y[5] = {
+        0,
+        1500 + c0,
+        2500 + c1,
+        3500 + c2,
+        4500 + c2
+    };
 
     if (raw > 4095u) {
         raw = 4095u;
@@ -59,13 +71,18 @@ int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_off
         dc = lut_y[seg] + (num + (dx / 2)) / dx;
     }
 
-    dc += (int32_t)cal_offset_deci_c;
+    dc += TIP_COLD_JUNCTION_DECI_C;
     if (dc < 0) {
         dc = 0;
     } else if (dc > 9999) {
         dc = 9999;
     }
     return dc;
+}
+
+int32_t sensors_tip_adc_to_deci_c(uint16_t raw, uint8_t is_f245, int16_t cal_offset_deci_c) {
+    const int16_t cal[3] = { cal_offset_deci_c, cal_offset_deci_c, cal_offset_deci_c };
+    return sensors_tip_adc_to_deci_c_3pt(raw, is_f245, cal);
 }
 
 void sensors_filter_init(sensor_filter_t *f) {

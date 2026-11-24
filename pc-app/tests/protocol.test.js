@@ -54,7 +54,15 @@ test('parseStatLine parses real SLEEP line and clamps negative current watts', (
   assert.equal(st.sleep, 1);
   assert.equal(st.bl, 100);
   assert.equal(st.heaterOn, 1);
+  assert.equal(st.cal, null);
   assert.equal(st.watts, 0);
+});
+
+test('parseStatLine parses 3-point cal=c150,c250,c350 when present', () => {
+  const line = 'STAT ms=2500 state=HEAT fault=0x00(NONE) handle=F245 tip_c=250.2 target_c=250 act_c=250 duty=20 ticks=18 rail_mv=23100 cur_ma=2100 cur_pk=6900 zero_mv=1643 stand=0 sleep=1 bl=80 heater=1 cal=8,-5,12';
+  const st = parseStatLine(line);
+  assert.ok(st);
+  assert.deepEqual(st.cal, [8, -5, 12]);
 });
 
 test('parseStatLine computes active watts and fault details', () => {

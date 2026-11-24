@@ -128,6 +128,28 @@ static int parse_i32(const char *s, int32_t *out) {
     return 1;
 }
 
+static int parse_cal_args(const char *s, uint8_t *has_pt, int32_t *pt, int32_t *off) {
+    if (s == NULL || has_pt == NULL || pt == NULL || off == NULL) return 0;
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s == '\0') return 0;
+
+    char tok1[24];
+    size_t tlen = 0u;
+    while (*s != '\0' && *s != ' ' && *s != '\t') {
+        if (tlen + 1u >= sizeof(tok1)) return 0;
+        tok1[tlen++] = *s++;
+    }
+    tok1[tlen] = '\0';
+
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s == '\0') {
+        *has_pt = 0u;
+        return parse_i32(tok1, off);
+    }
+    *has_pt = 1u;
+    return parse_i32(tok1, pt) && parse_i32(s, off);
+}
+
 static void emit_heater_err(protocol_ctx_t *ctx, heater_cmd_err_t err) {
     emit_str(ctx, heater_err_msg(err));
     emit_str(ctx, "\r\n");
@@ -227,6 +249,12 @@ void protocol_emit_stat(
     p = append_hex8(out, p, sizeof(out), led_mask);
     p = fmt_append_str(out, p, sizeof(out), " heater=");
     p = append_u32(out, p, sizeof(out), hst->armed);
+    p = fmt_append_str(out, p, sizeof(out), " cal=");
+    p = append_i32(out, p, sizeof(out), (int32_t)(hst->cal_dc[0] / 10));
+    p = fmt_append_str(out, p, sizeof(out), ",");
+    p = append_i32(out, p, sizeof(out), (int32_t)(hst->cal_dc[1] / 10));
+    p = fmt_append_str(out, p, sizeof(out), ",");
+    p = append_i32(out, p, sizeof(out), (int32_t)(hst->cal_dc[2] / 10));
     p = fmt_append_str(out, p, sizeof(out), "\r\n");
     emit_str(ctx, out);
 }
@@ -274,7 +302,7 @@ void protocol_handle_line(
     if (eq_ci(cmd, "HELP") || eq_ci(cmd, "?")) {
         emit_str(ctx,
             "OK CMDS: HELP | INFO | STAT | HEAT <ON|OFF> | TEMP <100..450> | PRESET <1..3> | "
-            "SLEEP <ON|OFF|0|50..250> | CAL <-50..50> | CLEAR | SAVE | STREAM [ON|OFF|50..2000] | "
+            "SLEEP <ON|OFF|0|50..250> | CAL [150|250|350] <-50..50> | CLEAR | SAVE | STREAM [ON|OFF|50..2000] | "
             "BL <0..100> | BEEP [10..1000] | LED <0..255|AUTO> | REBOOT\r\n");
         return;
     }
@@ -430,8 +458,46 @@ void protocol_handle_line(
     }
 
     if (prefix_ci(cmd, "CAL")) {
+        uint8_t has_pt = 0u;
+        int32_t pt = 0;
         int32_t off = 0;
-        if (!parse_i32(cmd + 3, &off) || off < CAL_OFFSET_MIN_C || off > CAL_OFFSET_MAX_C) {
+        if (!parse_cal_args(cmd + 3, &has_pt, &pt, &off)) {
+            emit_str(ctx, "ERR CAL_RANGE_-50_50\r\n");
+            return;
+        }
+        if (has_pt != 0u) {
+            uint8_t idx = 0u;
+            if (pt == 150) idx = 0u;
+            else if (pt == 250) idx = 1u;
+            else if (pt == 350) idx = 2u;
+            else {
+                emit_str(ctx, "ERR CAL_POINT_150_250_350\r\n");
+                return;
+            }
+            if (off < CAL_OFFSET_MIN_C || off > CAL_OFFSET_MAX_C) {
+                emit_str(ctx, "ERR CAL_RANGE_-50_50\r\n");
+                return;
+            }
+            if (ctx->ops.set_cal_point == NULL) {
+                emit_str(ctx, "ERR UNSUPPORTED\r\n");
+                return;
+            }
+            heater_cmd_err_t err = ctx->ops.set_cal_point(idx, (int16_t)off, ctx->ops.user);
+            if (err != HEATER_CMD_OK) {
+                emit_heater_err(ctx, err);
+                return;
+            }
+            char buf[40];
+            size_t p = 0u;
+            p = fmt_append_str(buf, p, sizeof(buf), "OK CAL ");
+            p = append_i32(buf, p, sizeof(buf), pt);
+            p = fmt_append_str(buf, p, sizeof(buf), "=");
+            p = append_i32(buf, p, sizeof(buf), off);
+            (void)fmt_append_str(buf, p, sizeof(buf), "\r\n");
+            emit_str(ctx, buf);
+            return;
+        }
+        if (off < CAL_OFFSET_MIN_C || off > CAL_OFFSET_MAX_C) {
             emit_str(ctx, "ERR CAL_RANGE_-50_50\r\n");
             return;
         }
